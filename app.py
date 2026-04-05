@@ -147,6 +147,33 @@ def analytics():
     
     # Weekly usage
     weekly_usage = sum(daily_usage.values()) if len(daily_usage) <= 7 else sum(list(daily_usage.values())[-7:])
+
+    # Block usage (for bar chart)
+    block_usage = defaultdict(float)
+    for d in data:
+        block_usage[d['block']] += d['waterUsed']
+
+    # Time-of-day buckets for visualization (liters)
+    tod_usage = {
+        'morning': 0.0,    # 06:00–11:59
+        'afternoon': 0.0,  # 12:00–16:59
+        'evening': 0.0,    # 17:00–21:59
+        'night': 0.0       # else
+    }
+    for d in data:
+        h = int(d['time'].split(':')[0])
+        if 6 <= h < 12:
+            tod_usage['morning'] += d['waterUsed']
+        elif 12 <= h < 17:
+            tod_usage['afternoon'] += d['waterUsed']
+        elif 17 <= h < 22:
+            tod_usage['evening'] += d['waterUsed']
+        else:
+            tod_usage['night'] += d['waterUsed']
+
+    # Benchmark: per-student vs target (100–120 L/day typical)
+    benchmark_target_low = 100
+    benchmark_target_high = 120
     
     # Water saved compared to previous day
     water_saved = 0
@@ -203,9 +230,6 @@ def analytics():
         suggestions.append(f"⚠️ Abnormal spike detected: {round(max_usage)} L in single entry. Inspect for leaks immediately.")
     
     # Block-specific analysis
-    block_usage = defaultdict(float)
-    for d in data:
-        block_usage[d['block']] += d['waterUsed']
     if len(block_usage) > 1:
         max_block = max(block_usage.items(), key=lambda x: x[1])
         min_block = min(block_usage.items(), key=lambda x: x[1])
@@ -225,7 +249,68 @@ def analytics():
         suggestions.append("Encourage students to report dripping taps immediately.")
         suggestions.append("Display water conservation posters in common areas.")
         suggestions.append("Conduct weekly water audits to identify wastage.")
-    
+
+    # Curated conservation playbook (shown as actionable steps; order shifts with data)
+    conservation_steps = [
+        {
+            'step': 1,
+            'title': 'Fix leaks first',
+            'detail': 'A single dripping tap can waste 1,000+ liters per month. Log repairs and re-check tank drop-offs after fixes.',
+            'icon': 'fa-tint-slash',
+            'priority': 1 if abnormal else 3
+        },
+        {
+            'step': 2,
+            'title': 'Shorter, smarter showers',
+            'detail': 'Use timer cards or playlists (~5 min). Prefer bucket baths where cultural norms allow; they often use less than long showers.',
+            'icon': 'fa-shower',
+            'priority': 2 if bathroom_usage > total_usage * 0.45 else 4
+        },
+        {
+            'step': 3,
+            'title': 'Kitchen: wash in basins',
+            'detail': 'Rinse vegetables and dishes in a filled basin instead of under running water. Only run full dishwasher/racks when available.',
+            'icon': 'fa-utensils',
+            'priority': 2 if kitchen_usage > total_usage * 0.2 else 5
+        },
+        {
+            'step': 4,
+            'title': 'Laundry discipline',
+            'detail': 'Full loads only, cold cycles when possible, and one shared laundry window per block to spread peak demand.',
+            'icon': 'fa-shirt',
+            'priority': 2 if laundry_usage > total_usage * 0.25 else 5
+        },
+        {
+            'step': 5,
+            'title': 'Cleaning without the hose',
+            'detail': 'Sweep first, mop with minimal buckets, and reuse greywater where safe for non-potable floor cleaning.',
+            'icon': 'fa-broom',
+            'priority': 2 if cleaning_usage > total_usage * 0.15 else 6
+        },
+        {
+            'step': 6,
+            'title': 'Stagger peak times',
+            'detail': 'Avoid everyone bathing 6–9 AM / 6–9 PM the same hour. Publish a simple rota so pumps and tanks stay stable.',
+            'icon': 'fa-clock',
+            'priority': 2 if (morning_usage > total_usage * 0.35 or evening_usage > total_usage * 0.3) else 6
+        },
+        {
+            'step': 7,
+            'title': 'Metering awareness',
+            'detail': 'Post weekly “liters per student” from this dashboard in notice boards. Friendly competition between blocks often cuts waste.',
+            'icon': 'fa-chart-simple',
+            'priority': 4 if avg_per_student > benchmark_target_high else 7
+        },
+        {
+            'step': 8,
+            'title': 'Rainwater & reuse (where permitted)',
+            'detail': 'Capture roof runoff for landscaping/flushing trials. Label pipes clearly and keep potable and non-potable separate.',
+            'icon': 'fa-cloud-rain',
+            'priority': 8
+        }
+    ]
+    conservation_steps.sort(key=lambda x: (x['priority'], x['step']))
+
     return jsonify({
         'totalUsage': round(total_usage, 2),
         'avgPerStudent': round(avg_per_student, 2),
@@ -242,7 +327,12 @@ def analytics():
         'perStudentDaily': round(per_student_daily, 2),
         'tankRefillHours': tank_refill_hours,
         'weeklyUsage': round(weekly_usage, 2),
-        'waterSaved': round(water_saved, 2)
+        'waterSaved': round(water_saved, 2),
+        'blockUsage': {k: round(v, 2) for k, v in block_usage.items()},
+        'timeOfDayUsage': {k: round(v, 2) for k, v in tod_usage.items()},
+        'benchmarkTargetLow': benchmark_target_low,
+        'benchmarkTargetHigh': benchmark_target_high,
+        'conservationSteps': conservation_steps
     })
 
 @app.route('/api/predict')

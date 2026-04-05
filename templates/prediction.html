@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prediction - AquaTrack</title>
+    <title>Prediction — AquaTrack</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <h2><i class="fas fa-tint"></i> AquaTrack</h2>
+            <div class="nav-brand">
+                <span class="brand-icon" aria-hidden="true"><i class="fas fa-droplet"></i></span>
+                AquaTrack
+            </div>
             <ul class="nav-links">
                 <li><a href="/">Home</a></li>
                 <li><a href="/form">Data Entry</a></li>
@@ -22,84 +25,122 @@
     </nav>
 
     <div class="container">
-        <h1>Water Usage Prediction</h1>
-        <p class="subtitle">AI-powered forecasting using Linear Regression</p>
+        <header class="page-header">
+            <h1>Next-day usage forecast</h1>
+            <p class="subtitle">A simple linear trend on daily totals — best used as a directional guide once you have several distinct days logged.</p>
+        </header>
 
-        <div class="prediction-result">
-            <h2>Predicted Water Usage Tomorrow</h2>
-            <p class="prediction-value" id="predictionValue">Loading...</p>
-            <p class="stat-label">liters</p>
-        </div>
+        <div id="predError" class="glass-card error" style="display: none;"></div>
 
-        <div class="chart-container">
-            <h3>Historical Data & Prediction Trend</h3>
-            <canvas id="predictionChart"></canvas>
-        </div>
+        <div id="predContent" style="display: none;">
+            <div class="prediction-hero">
+                <h2>Tomorrow (modeled)</h2>
+                <p class="prediction-value" id="predictionValue">—</p>
+                <p class="prediction-meta">liters — dotted segment on the chart is the projection</p>
+            </div>
 
-        <div class="info-section">
-            <h3>About the Prediction Model</h3>
-            <p>This system uses <strong>Linear Regression</strong> from scikit-learn to predict future water consumption based on historical usage patterns. The model analyzes daily consumption trends and forecasts the expected water usage for the next day.</p>
-            <p><strong>Note:</strong> Predictions become more accurate with more historical data. Ensure at least 3 days of data for reliable predictions.</p>
+            <div class="charts-grid" style="margin-top: 0;">
+                <div class="chart-panel chart-full">
+                    <h3><i class="fas fa-route"></i> History and one-step forecast</h3>
+                    <canvas id="predictionChart" height="90"></canvas>
+                </div>
+                <div class="chart-panel">
+                    <h3><i class="fas fa-scale-balanced"></i> How to read this</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem; line-height: 1.65;">
+                        The model fits a straight line through your <strong>sum of liters per calendar day</strong>. If usage is flat, the forecast stays flat; if it climbs or falls, the line extends that slope. Sudden one-day spikes (events, holidays) will tilt the forecast — pair with the dashboard’s spike alerts.
+                    </p>
+                </div>
+                <div class="chart-panel">
+                    <h3><i class="fas fa-lightbulb"></i> Improve accuracy</h3>
+                    <ul class="suggestions-list" style="margin-top: 0.5rem;">
+                        <li>Log at least 3 days; 7+ is better</li>
+                        <li>Keep missing days empty rather than estimating</li>
+                        <li>After major changes (new residents), wait for a fresh week</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
+    <footer class="site-footer">Forecast is indicative — not a replacement for tank alarms or municipal metering</footer>
+
     <script>
+        Chart.defaults.color = '#cbd5e1';
+        Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.12)';
+        Chart.defaults.font.family = '"DM Sans", "Segoe UI", system-ui, sans-serif';
+
+        let predictionChart;
+
         async function loadPrediction() {
+            const err = document.getElementById('predError');
+            const content = document.getElementById('predContent');
+            err.style.display = 'none';
+            content.style.display = 'none';
+
             try {
                 const response = await fetch('/api/predict');
                 const data = await response.json();
 
                 if (data.error) {
-                    document.getElementById('predictionValue').textContent = 'Insufficient Data';
-                    document.querySelector('.prediction-value').style.color = '#e74c3c';
-                    document.querySelector('.chart-container').innerHTML = '<p class="error">Need at least 3 data points for prediction. Please enter more data.</p>';
+                    err.textContent = data.error + ' Use Data Entry to add more daily readings.';
+                    err.style.display = 'block';
                     return;
                 }
 
-                document.getElementById('predictionValue').textContent = data.prediction.toLocaleString();
+                content.style.display = 'block';
+                document.getElementById('predictionValue').textContent = Number(data.prediction).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-                // Create chart
-                const labels = data.historicalData.map(d => `Day ${d.day}`);
-                labels.push(`Day ${data.historicalData.length + 1} (Predicted)`);
-                
-                const historicalValues = data.historicalData.map(d => d.usage);
-                const allValues = [...historicalValues, data.prediction];
+                if (predictionChart) predictionChart.destroy();
 
-                const ctx = document.getElementById('predictionChart').getContext('2d');
-                new Chart(ctx, {
+                const n = data.historicalData.length;
+                const labels = data.historicalData.map((d) => `Day ${d.day}`);
+                labels.push(`Day ${n + 1} (pred.)`);
+                const historicalValues = data.historicalData.map((d) => d.usage);
+                const lastHistorical = historicalValues[n - 1];
+                const pointBg = [...historicalValues.map(() => '#22d3ee'), '#22d3ee'];
+                const pointR = [...historicalValues.map(() => 5), 0];
+
+                const forecastData = [...Array(Math.max(0, n - 1)).fill(null), lastHistorical, data.prediction];
+                const forecastRadii = forecastData.map((v, i) => (i === n ? 9 : i === n - 1 ? 5 : 0));
+
+                predictionChart = new Chart(document.getElementById('predictionChart'), {
                     type: 'line',
                     data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Water Usage (L)',
-                            data: allValues,
-                            borderColor: '#3498db',
-                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                            segment: {
-                                borderDash: ctx => ctx.p1DataIndex === historicalValues.length ? [5, 5] : []
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Observed daily total',
+                                data: [...historicalValues, null],
+                                borderColor: '#22d3ee',
+                                backgroundColor: 'rgba(34, 211, 238, 0.12)',
+                                tension: 0.3,
+                                fill: true,
+                                spanGaps: false,
+                                pointRadius: pointR,
+                                pointBackgroundColor: pointBg
                             },
-                            pointBackgroundColor: (ctx) => {
-                                return ctx.dataIndex === historicalValues.length ? '#e74c3c' : '#3498db';
-                            },
-                            pointRadius: (ctx) => {
-                                return ctx.dataIndex === historicalValues.length ? 8 : 4;
+                            {
+                                label: 'Forecast (1 step)',
+                                data: forecastData,
+                                borderColor: '#f87171',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                borderDash: [6, 6],
+                                pointRadius: forecastRadii,
+                                pointBackgroundColor: '#f87171',
+                                pointHoverRadius: 8
                             }
-                        }]
+                        ]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                display: true
-                            }
-                        }
+                        scales: { y: { beginAtZero: true } },
+                        plugins: { legend: { display: true } }
                     }
                 });
-
-            } catch (error) {
-                console.error('Error loading prediction:', error);
-                document.getElementById('predictionValue').textContent = 'Error';
+            } catch (e) {
+                err.textContent = 'Could not load prediction.';
+                err.style.display = 'block';
             }
         }
 

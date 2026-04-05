@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Water Usage Analysis System</title>
+    <title>AquaTrack — Smart Water Management</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <h2><i class="fas fa-tint"></i> AquaTrack</h2>
+            <div class="nav-brand">
+                <span class="brand-icon" aria-hidden="true"><i class="fas fa-droplet"></i></span>
+                AquaTrack
+            </div>
             <ul class="nav-links">
                 <li><a href="/" class="active">Home</a></li>
                 <li><a href="/form">Data Entry</a></li>
@@ -20,97 +23,106 @@
         </div>
     </nav>
 
-    <!-- Hero Section -->
     <section class="hero-section">
         <div class="hero-content">
-            <h1 class="hero-title">Smart Water Management for Hostels</h1>
-            <p class="hero-subtitle">AI-Powered Analytics • Real-Time Monitoring • Conservation Insights</p>
+            <span class="hero-badge"><i class="fas fa-leaf"></i> Hostel & campus water intelligence</span>
+            <h1 class="hero-title">See every liter. Act before waste adds up.</h1>
+            <p class="hero-subtitle">Log tank readings, surface peaks and leaks, and share a conservation playbook your residents can follow—without spinning up a database.</p>
             <div class="hero-buttons">
-                <a href="/form" class="btn-hero btn-primary">Start Tracking</a>
-                <a href="/dashboard" class="btn-hero btn-secondary">View Dashboard</a>
+                <a href="/form" class="btn-hero btn-primary"><i class="fas fa-pen-to-square"></i> Log usage</a>
+                <a href="/dashboard" class="btn-hero btn-secondary">Open dashboard</a>
             </div>
         </div>
     </section>
 
-    <!-- Stats Section -->
     <section class="stats-section">
         <div class="stat-item">
             <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
-            <h3>Real-Time Analytics</h3>
-            <p>Monitor water consumption patterns instantly</p>
+            <h3>Live analytics</h3>
+            <p>Heatmaps, trends, and area splits update as you add readings.</p>
         </div>
         <div class="stat-item">
-            <div class="stat-icon"><i class="fas fa-brain"></i></div>
-            <h3>AI Predictions</h3>
-            <p>Machine learning forecasts future usage</p>
+            <div class="stat-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+            <h3>Forecasting</h3>
+            <p>Linear regression highlights tomorrow’s expected demand.</p>
         </div>
         <div class="stat-item">
-            <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-            <h3>Leak Detection</h3>
-            <p>Automatic alerts for abnormal consumption</p>
+            <div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div>
+            <h3>Spike alerts</h3>
+            <p>Unusual single entries flag possible leaks or misuse.</p>
         </div>
         <div class="stat-item">
-            <div class="stat-icon"><i class="fas fa-lightbulb"></i></div>
-            <h3>Smart Recommendations</h3>
-            <p>Data-driven conservation strategies</p>
+            <div class="stat-icon"><i class="fas fa-book-open"></i></div>
+            <h3>Playbook</h3>
+            <p>Prioritized conservation steps tailored to your usage mix.</p>
         </div>
     </section>
 
-    <!-- Features Section -->
     <section class="features-section">
-        <h2 class="section-heading">Comprehensive Water Management Platform</h2>
+        <h2 class="section-heading">Everything in one flow</h2>
         <div class="features-grid">
             <div class="feature-box">
-                <div class="feature-icon"><i class="fas fa-edit"></i></div>
-                <h3>Data Entry</h3>
-                <p>Quick and easy water usage logging with automatic calculations</p>
-                <a href="/form" class="feature-link">Enter Data <i class="fas fa-arrow-right"></i></a>
+                <div class="feature-icon"><i class="fas fa-keyboard"></i></div>
+                <h3>Fast data entry</h3>
+                <p>Date, time, tank levels, headcount, and zone—structured for downstream charts.</p>
+                <a href="/form" class="feature-link">Enter a reading <i class="fas fa-arrow-right"></i></a>
             </div>
             <div class="feature-box">
-                <div class="feature-icon"><i class="fas fa-chart-bar"></i></div>
-                <h3>Analytics Dashboard</h3>
-                <p>Interactive charts showing consumption trends and patterns</p>
-                <a href="/dashboard" class="feature-link">View Analytics <i class="fas fa-arrow-right"></i></a>
+                <div class="feature-icon"><i class="fas fa-chart-pie"></i></div>
+                <h3>Rich dashboard</h3>
+                <p>Hourly heatmap, area mix, blocks, time-of-day doughnut, and student benchmarks.</p>
+                <a href="/dashboard" class="feature-link">Explore charts <i class="fas fa-arrow-right"></i></a>
             </div>
             <div class="feature-box">
-                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
-                <h3>Usage Prediction</h3>
-                <p>AI-powered forecasting for proactive water management</p>
-                <a href="/prediction" class="feature-link">See Predictions <i class="fas fa-arrow-right"></i></a>
+                <div class="feature-icon"><i class="fas fa-forward"></i></div>
+                <h3>Next-day prediction</h3>
+                <p>See how daily totals evolved and where the trend line points.</p>
+                <a href="/prediction" class="feature-link">View forecast <i class="fas fa-arrow-right"></i></a>
             </div>
         </div>
     </section>
 
-    <!-- Benefits Section -->
     <section class="benefits-section">
         <div class="benefits-content">
-            <h2>Why Choose AquaTrack?</h2>
+            <h2>Why teams adopt AquaTrack</h2>
             <ul class="benefits-list">
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> Reduce water wastage by up to 30%</li>
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> Identify leaks before they become costly</li>
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> Track per-student water footprint</li>
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> Generate sustainability reports</li>
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> No database required - simple JSON storage</li>
-                <li><span class="check-icon"><i class="fas fa-check-circle"></i></span> Easy to deploy and maintain</li>
+                <li><span class="check-icon"><i class="fas fa-circle-check"></i></span> Pinpoint peaks by hour, block, and zone</li>
+                <li><span class="check-icon"><i class="fas fa-circle-check"></i></span> Compare per-student usage to practical targets</li>
+                <li><span class="check-icon"><i class="fas fa-circle-check"></i></span> JSON storage—clone the folder and run</li>
+                <li><span class="check-icon"><i class="fas fa-circle-check"></i></span> Conservation steps you can print or post</li>
             </ul>
         </div>
         <div class="benefits-visual">
             <div class="visual-card">
-                <h3><i class="fas fa-globe"></i> Environmental Impact</h3>
-                <p>Contribute to water conservation and sustainability goals</p>
+                <h3><i class="fas fa-earth-asia"></i> Impact</h3>
+                <p>Every liter deferred is energy, chemicals, and pumping saved downstream.</p>
             </div>
             <div class="visual-card">
-                <h3><i class="fas fa-dollar-sign"></i> Cost Savings</h3>
-                <p>Reduce water bills through efficient usage monitoring</p>
+                <h3><i class="fas fa-piggy-bank"></i> Operations</h3>
+                <p>Earlier refill planning and calmer peaks reduce pump cycling and complaints.</p>
             </div>
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="cta-section">
-        <h2>Ready to Start Saving Water?</h2>
-        <p>Begin tracking your hostel's water usage today</p>
-        <a href="/form" class="btn-cta">Get Started Now</a>
+    <section class="conservation-preview glass-card" style="max-width: 1280px; margin: 0 auto 3rem;">
+        <div class="conservation-preview" style="padding: 0;">
+            <h2><i class="fas fa-list-check" style="color: var(--accent); margin-right: 0.5rem;"></i>Sample conservation pathway</h2>
+            <p class="subtitle" style="text-align: center; margin: 0 auto 1.5rem; max-width: 640px;">On the dashboard, these steps reorder automatically based on your data (leaks, laundry share, peaks). Here is the default playbook:</p>
+            <div class="preview-steps">
+                <div class="preview-step"><i class="fas fa-wrench"></i> Fix leaks and stuck float valves first</div>
+                <div class="preview-step"><i class="fas fa-clock"></i> Stagger peak showers across blocks</div>
+                <div class="preview-step"><i class="fas fa-sink"></i> Rinse in basins, not running taps</div>
+                <div class="preview-step"><i class="fas fa-shirt"></i> Full laundry loads + shared time windows</div>
+            </div>
+        </div>
     </section>
+
+    <section class="cta-section">
+        <h2>Start with one week of readings</h2>
+        <p>Three or more days unlock prediction; a full week makes trends obvious.</p>
+        <a href="/form" class="btn-cta">Begin logging</a>
+    </section>
+
+    <footer class="site-footer">AquaTrack — lightweight water intelligence for shared housing</footer>
 </body>
 </html>
