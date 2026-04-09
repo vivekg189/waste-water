@@ -6,8 +6,14 @@ from collections import defaultdict
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
+from serial_reader import ArduinoSerialSource
+
 app = Flask(__name__)
 DATA_FILE = 'data/water_data.json'
+
+SERIAL_PORT = os.environ.get('ARDUINO_PORT', 'COM9')
+SERIAL_BAUD = int(os.environ.get('ARDUINO_BAUD', '9600'))
+arduino_source = ArduinoSerialSource(SERIAL_PORT, SERIAL_BAUD)
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -34,6 +40,16 @@ def dashboard():
 @app.route('/prediction')
 def prediction():
     return render_template('prediction.html')
+
+
+@app.route('/live-sensor')
+def live_sensor():
+    return render_template('arduino.html')
+
+
+@app.route('/api/arduino/live')
+def arduino_live():
+    return jsonify(arduino_source.snapshot())
 
 @app.route('/api/submit', methods=['POST'])
 def submit_data():
@@ -365,6 +381,13 @@ def predict():
         'historicalData': [{'day': i+1, 'usage': usage_values[i]} for i in range(len(usage_values))]
     })
 
+def _start_arduino_serial():
+    """Open the serial port once (background thread inside ArduinoSerialSource)."""
+    arduino_source.start()
+
+
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
-    app.run(debug=True)
+    _start_arduino_serial()
+    # use_reloader=False: one Python process so COM is opened only once (no watcher subprocess).
+    app.run(debug=True, use_reloader=False)
