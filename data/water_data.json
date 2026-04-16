@@ -1,74 +1,14 @@
 [
   {
-    "date": "2026-03-07",
-    "time": "11:32",
-    "tankCapacity": 10000.0,
-    "prevLevel": 5000.0,
-    "currLevel": 4000.0,
-    "waterUsed": 1000.0,
-    "students": 100,
+    "date": "2026-04-12",
+    "time": "21:41",
+    "tankCapacity": 1000000.0,
+    "prevLevel": 70000.0,
+    "currLevel": 40000.0,
+    "waterUsed": 30000.0,
+    "students": 600,
     "area": "Bathroom",
     "block": "A",
-    "timestamp": "2026-03-07T11:33:01.253951"
-  },
-  {
-    "date": "2026-03-07",
-    "time": "11:33",
-    "tankCapacity": 200.0,
-    "prevLevel": 50.0,
-    "currLevel": 40.0,
-    "waterUsed": 10.0,
-    "students": 9,
-    "area": "Kitchen",
-    "block": "A",
-    "timestamp": "2026-03-07T11:33:37.904993"
-  },
-  {
-    "date": "2026-03-07",
-    "time": "11:33",
-    "tankCapacity": 1000.0,
-    "prevLevel": 50.0,
-    "currLevel": 40.0,
-    "waterUsed": 10.0,
-    "students": 100,
-    "area": "Kitchen",
-    "block": "A",
-    "timestamp": "2026-03-07T11:34:18.244458"
-  },
-  {
-    "date": "2026-03-07",
-    "time": "09:00",
-    "tankCapacity": 1000.0,
-    "prevLevel": 200.0,
-    "currLevel": 199.0,
-    "waterUsed": 1.0,
-    "students": 19,
-    "area": "Cleaning",
-    "block": "70",
-    "timestamp": "2026-03-07T11:47:16.876167"
-  },
-  {
-    "date": "2026-03-06",
-    "time": "09:00",
-    "tankCapacity": 50000.0,
-    "prevLevel": 45000.0,
-    "currLevel": 20000.0,
-    "waterUsed": 25000.0,
-    "students": 50,
-    "area": "Bathroom",
-    "block": "B",
-    "timestamp": "2026-03-07T11:53:55.855168"
-  },
-  {
-    "date": "2026-03-07",
-    "time": "15:13",
-    "tankCapacity": 0.03,
-    "prevLevel": 0.03,
-    "currLevel": 0.02,
-    "waterUsed": 0.009999999999999998,
-    "students": 2,
-    "area": "Bathroom",
-    "block": "A",
-    "timestamp": "2026-03-07T15:14:29.238510"
+    "timestamp": "2026-04-12T21:43:45.622608"
   }
 ]

@@ -1,0 +1,24 @@
+# Environment variables (contains API keys)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Data (optional - remove if you want to push sample data)
+data/water_data.json
+
+# IDE
+.vscode/
+.idea/

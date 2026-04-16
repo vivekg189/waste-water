@@ -3,10 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live sensor — AquaTrack</title>
+    <title>Live Sensor — AquaTrack</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* ── Live Sensor page styles ── */
+        .ls-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.75rem;
+        }
+        .ls-header-row h1 { margin: 0; }
+
+        /* Status pill */
+        .ls-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.45rem 1.1rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            border: 1px solid transparent;
+            transition: background 0.3s, color 0.3s, border-color 0.3s;
+        }
+        .ls-status-pill.online  { background: rgba(52,211,153,0.15); color: #34d399; border-color: rgba(52,211,153,0.35); }
+        .ls-status-pill.offline { background: rgba(248,113,113,0.15); color: #f87171; border-color: rgba(248,113,113,0.35); }
+        .ls-status-pill.waiting { background: rgba(251,191,36,0.12);  color: #fbbf24; border-color: rgba(251,191,36,0.3); }
+
+        /* Pulse dot */
+        .ls-dot {
+            width: 9px; height: 9px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .online  .ls-dot { background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,0.6); animation: pulse-green 1.4s infinite; }
+        .offline .ls-dot { background: #f87171; }
+        .waiting .ls-dot { background: #fbbf24; box-shadow: 0 0 0 0 rgba(251,191,36,0.6); animation: pulse-yellow 1.4s infinite; }
+
+        @keyframes pulse-green  { 0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.55)} 50%{box-shadow:0 0 0 7px rgba(52,211,153,0)} }
+        @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0.55)}  50%{box-shadow:0 0 0 7px rgba(251,191,36,0)} }
+
+        /* Live badge */
+        .ls-live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(148,163,184,0.07);
+        }
+        .ls-live-badge .live-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #34d399;
+            animation: pulse-green 1s infinite;
+        }
+
+        /* Stat cards row */
+        .ls-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin-bottom: 1.25rem; }
+        @media(max-width:860px){ .ls-stats { grid-template-columns: repeat(2,1fr); } }
+        @media(max-width:480px){ .ls-stats { grid-template-columns: 1fr; } }
+
+        .ls-card {
+            background: linear-gradient(145deg, rgba(30,41,59,0.9) 0%, rgba(15,23,42,0.95) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.2rem 1.3rem;
+            display: flex; align-items: center; gap: 1rem;
+            transition: border-color 0.2s;
+        }
+        .ls-card:hover { border-color: rgba(34,211,238,0.25); }
+        .ls-card-icon {
+            flex-shrink: 0; width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.15rem;
+        }
+        .ls-card-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .ls-card-value { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+        .ls-card-sub   { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+        /* Tank progress section */
+        .ls-tank-section {
+            background: linear-gradient(145deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.92) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.4rem 1.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .ls-tank-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .ls-tank-title {
+            font-size: 0.92rem; font-weight: 600; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.45rem;
+        }
+        .ls-tank-title i { color: var(--accent); }
+        .ls-tank-pct {
+            font-size: 2rem; font-weight: 700; letter-spacing: -0.03em;
+        }
+        .ls-bar-track {
+            height: 18px; border-radius: 999px;
+            background: rgba(148,163,184,0.12);
+            overflow: hidden; position: relative;
+        }
+        .ls-bar-fill {
+            height: 100%; border-radius: 999px;
+            transition: width 0.6s ease, background 0.4s ease;
+            min-width: 4px;
+        }
+        .ls-bar-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.72rem; color: var(--text-muted);
+            margin-top: 0.4rem;
+        }
+        .ls-zone-legend {
+            display: flex; gap: 1.25rem; margin-top: 0.85rem; flex-wrap: wrap;
+        }
+        .ls-zone-item {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.78rem; color: var(--text-muted);
+        }
+        .ls-zone-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* Last reading + packets row */
+        .ls-bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+        @media(max-width:640px){ .ls-bottom-row { grid-template-columns: 1fr; } }
+
+        .ls-reading-card {
+            background: linear-gradient(145deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.92) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.3rem 1.4rem;
+        }
+        .ls-reading-title {
+            font-size: 0.85rem; font-weight: 600; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.4rem; margin-bottom: 1rem;
+        }
+        .ls-reading-title i { color: var(--accent); }
+        .ls-reading-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.65rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .ls-reading-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .ls-reading-key { font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+        .ls-reading-val { font-size: 1.05rem; font-weight: 700; }
+
+        /* Error banner */
+        .ls-error {
+            display: none;
+            align-items: flex-start; gap: 0.85rem;
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius-sm);
+            background: rgba(248,113,113,0.1);
+            border: 1px solid rgba(248,113,113,0.3);
+            color: #fca5a5;
+            font-size: 0.9rem;
+            margin-bottom: 1.25rem;
+        }
+        .ls-error i { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+        .ls-error-title { font-weight: 700; margin-bottom: 0.2rem; }
+        .ls-error-msg   { color: #fca5a5; opacity: 0.85; }
+
+        /* Port info strip */
+        .ls-port-strip {
+            font-size: 0.8rem; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .ls-port-strip code {
+            background: rgba(148,163,184,0.1);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.15rem 0.5rem;
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -19,170 +202,340 @@
                 <li><a href="/">Home</a></li>
                 <li><a href="/form">Data Entry</a></li>
                 <li><a href="/dashboard">Dashboard</a></li>
-                <li><a href="/live-sensor" class="active">Live sensor</a></li>
+                <li><a href="/live-sensor" class="active">Live Sensor</a></li>
                 <li><a href="/prediction">Prediction</a></li>
             </ul>
         </div>
     </nav>
 
     <div class="container">
-        <header class="page-header">
-            <h1>Arduino live water sensor</h1>
-            <p class="subtitle">Reads serial data from your board (default <strong>COM9</strong> @ 9600 baud). Close the Arduino Serial Monitor while this app is running so the port is not busy.</p>
-        </header>
 
-        <div class="stats-grid" style="margin-bottom: 1.25rem;">
-            <div class="stat-card" id="connCard">
-                <h3>Serial link</h3>
-                <p class="stat-value" id="connStatus">…</p>
-                <p class="stat-label" id="connPort">—</p>
+        <!-- Header row -->
+        <div class="ls-header-row">
+            <div>
+                <h1 style="margin-bottom:0.25rem;">Live Sensor</h1>
+                <p class="subtitle">Real-time water level from your Arduino sensor.</p>
             </div>
-            <div class="stat-card">
-                <h3>Latest reading</h3>
-                <p class="stat-value" id="liveValue">—</p>
-                <p class="stat-label">parsed number from line</p>
-            </div>
-            <div class="stat-card">
-                <h3>Last line</h3>
-                <p class="stat-value" id="rawLine" style="font-size: 1rem; word-break: break-all;">—</p>
-                <p class="stat-label" id="lastAt">—</p>
-            </div>
-            <div class="stat-card">
-                <h3>Lines received</h3>
-                <p class="stat-value" id="linesRead">0</p>
-                <p class="stat-label">since server start</p>
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <span class="ls-live-badge"><span class="live-dot"></span> Updating every 1s</span>
+                <span class="ls-status-pill waiting" id="statusPill">
+                    <span class="ls-dot"></span>
+                    <span id="statusText">Connecting…</span>
+                </span>
             </div>
         </div>
 
-        <div id="errBanner" class="alert" style="display: none;"></div>
+        <!-- Port info -->
+        <div class="ls-port-strip">
+            <i class="fas fa-plug"></i>
+            Port: <code id="portLabel">—</code>
+            &nbsp;·&nbsp;
+            Baud: <code id="baudLabel">—</code>
+        </div>
 
-        <div class="chart-panel chart-full" style="margin-bottom: 1.5rem;">
-            <h3><i class="fas fa-chart-area"></i> Live trace</h3>
+        <!-- Error banner -->
+        <div class="ls-error" id="errBanner">
+            <i class="fas fa-circle-exclamation"></i>
+            <div>
+                <div class="ls-error-title">Sensor Not Reachable</div>
+                <div class="ls-error-msg" id="errMsg">—</div>
+            </div>
+        </div>
+
+        <!-- 4 stat cards -->
+        <div class="ls-stats">
+            <div class="ls-card">
+                <div class="ls-card-icon" id="connIcon" style="background:rgba(251,191,36,0.15);color:#fbbf24;">
+                    <i class="fas fa-satellite-dish"></i>
+                </div>
+                <div>
+                    <div class="ls-card-label">Connection</div>
+                    <div class="ls-card-value" id="connValue">—</div>
+                    <div class="ls-card-sub" id="connSub">Waiting for sensor</div>
+                </div>
+            </div>
+            <div class="ls-card">
+                <div class="ls-card-icon" style="background:rgba(34,211,238,0.15);color:#22d3ee;">
+                    <i class="fas fa-droplet"></i>
+                </div>
+                <div>
+                    <div class="ls-card-label">Water Level</div>
+                    <div class="ls-card-value" id="levelValue">—</div>
+                    <div class="ls-card-sub">% of tank capacity</div>
+                </div>
+            </div>
+            <div class="ls-card">
+                <div class="ls-card-icon" style="background:rgba(167,139,250,0.15);color:#a78bfa;">
+                    <i class="fas fa-ruler-vertical"></i>
+                </div>
+                <div>
+                    <div class="ls-card-label">Distance</div>
+                    <div class="ls-card-value" id="distValue">—</div>
+                    <div class="ls-card-sub">cm from sensor</div>
+                </div>
+            </div>
+            <div class="ls-card">
+                <div class="ls-card-icon" style="background:rgba(52,211,153,0.15);color:#34d399;">
+                    <i class="fas fa-wave-square"></i>
+                </div>
+                <div>
+                    <div class="ls-card-label">Packets Received</div>
+                    <div class="ls-card-value" id="packetsValue">0</div>
+                    <div class="ls-card-sub">since server start</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tank progress bar -->
+        <div class="ls-tank-section">
+            <div class="ls-tank-header">
+                <span class="ls-tank-title"><i class="fas fa-database"></i> Tank Level</span>
+                <span class="ls-tank-pct" id="tankPct">—</span>
+            </div>
+            <div class="ls-bar-track">
+                <div class="ls-bar-fill" id="tankBar" style="width:0%;background:#34d399;"></div>
+            </div>
+            <div class="ls-bar-labels">
+                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+            <div class="ls-zone-legend">
+                <div class="ls-zone-item"><div class="ls-zone-dot" style="background:#34d399;"></div> Full (>60%)</div>
+                <div class="ls-zone-item"><div class="ls-zone-dot" style="background:#fbbf24;"></div> Moderate (30–60%)</div>
+                <div class="ls-zone-item"><div class="ls-zone-dot" style="background:#f87171;"></div> Low (<30%)</div>
+            </div>
+        </div>
+
+        <!-- Last reading + raw data -->
+        <div class="ls-bottom-row">
+            <div class="ls-reading-card">
+                <div class="ls-reading-title"><i class="fas fa-clock"></i> Last Reading</div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-droplet"></i> Water Level</span>
+                    <span class="ls-reading-val" id="readLevel">—</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-ruler-vertical"></i> Distance</span>
+                    <span class="ls-reading-val" id="readDist">—</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-calendar-clock"></i> Timestamp</span>
+                    <span class="ls-reading-val" id="readTime" style="font-size:0.88rem;">—</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-code"></i> Raw Data</span>
+                    <span class="ls-reading-val" id="readRaw" style="font-size:0.82rem;word-break:break-all;color:var(--text-muted);">—</span>
+                </div>
+            </div>
+
+            <div class="ls-reading-card">
+                <div class="ls-reading-title"><i class="fas fa-circle-info"></i> Sensor Info</div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-plug"></i> Serial Port</span>
+                    <span class="ls-reading-val" id="infoPort" style="font-size:0.95rem;">—</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-gauge"></i> Baud Rate</span>
+                    <span class="ls-reading-val" id="infoBaud" style="font-size:0.95rem;">—</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-wave-square"></i> Total Packets</span>
+                    <span class="ls-reading-val" id="infoPackets">0</span>
+                </div>
+                <div class="ls-reading-row">
+                    <span class="ls-reading-key"><i class="fas fa-circle-dot"></i> Status</span>
+                    <span class="ls-reading-val" id="infoStatus" style="font-size:0.9rem;">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live chart -->
+        <div class="chart-panel chart-full" style="margin-bottom:2rem;">
+            <h3><i class="fas fa-chart-area"></i> Water Level — Live Trace</h3>
             <canvas id="liveChart" height="90"></canvas>
         </div>
 
-        <div class="charts-grid">
-            <div class="chart-panel">
-                <h3><i class="fas fa-microchip"></i> Firmware format</h3>
-                <p style="color: var(--text-muted); font-size: 0.92rem; line-height: 1.65;">
-                    Send one line per reading with <code style="color: var(--accent);">Serial.println()</code>. Examples this server understands:
-                </p>
-                <ul class="suggestions-list" style="margin-top: 0.75rem;">
-                    <li><code>42.5</code> or <code>LEVEL:42.5</code></li>
-                    <li><code>{"level":18.2}</code> (JSON with <code>level</code>, <code>value</code>, <code>distance</code>, …)</li>
-                </ul>
-            </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-gear"></i> Change port</h3>
-                <p style="color: var(--text-muted); font-size: 0.92rem; line-height: 1.65;">
-                    Default is COM9. To use another port, set environment variables before starting Flask:
-                </p>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; font-family: ui-monospace, monospace;">
-                    set ARDUINO_PORT=COM3<br>
-                    set ARDUINO_BAUD=115200
-                </p>
-            </div>
-        </div>
     </div>
 
-    <footer class="site-footer">Polling <code>/api/arduino/live</code> — keep this tab open for updates</footer>
+    <footer class="site-footer">Polling <code>/api/arduino/live</code> every 1 second — keep this tab open</footer>
 
     <script>
-        Chart.defaults.color = '#cbd5e1';
-        Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.12)';
-        Chart.defaults.font.family = '"DM Sans", "Segoe UI", system-ui, sans-serif';
+    Chart.defaults.color = '#cbd5e1';
+    Chart.defaults.borderColor = 'rgba(148,163,184,0.12)';
+    Chart.defaults.font.family = '"DM Sans","Segoe UI",system-ui,sans-serif';
 
-        let chart;
-        const MAX_POINTS = 80;
+    let chart;
+    const MAX_POINTS = 80;
 
-        function trimHistory(labels, data) {
-            if (labels.length <= MAX_POINTS) return { labels, data };
-            return {
-                labels: labels.slice(-MAX_POINTS),
-                data: data.slice(-MAX_POINTS)
-            };
+    // ── Friendly error messages ───────────────────────────────
+    const ERROR_MAP = [
+        { match: /access is denied|permissionerror/i,  msg: 'Port is in use by another app. Close Arduino IDE Serial Monitor or PuTTY, then refresh.' },
+        { match: /could not open port|filenotfounderror/i, msg: 'Sensor not found on this port. Check the USB cable and port setting in your .env file.' },
+        { match: /pyserial is not installed/i,          msg: 'pyserial library is missing. Run: pip install pyserial' },
+        { match: /no such file/i,                       msg: 'Serial port does not exist. Verify the port name (e.g. COM3, COM9) in your .env file.' },
+    ];
+
+    function friendlyError(raw) {
+        if (!raw) return null;
+        for (const { match, msg } of ERROR_MAP) {
+            if (match.test(raw)) return msg;
         }
+        return 'Sensor disconnected. Check the USB cable and make sure no other app is using the port.';
+    }
 
-        async function poll() {
-            try {
-                const r = await fetch('/api/arduino/live');
-                const s = await r.json();
+    // ── Tank bar ──────────────────────────────────────────────
+    function setTankBar(pct) {
+        const p = Math.min(100, Math.max(0, pct || 0));
+        const bar = document.getElementById('tankBar');
+        bar.style.width = p + '%';
+        bar.style.background = p > 60 ? '#34d399' : p > 30 ? '#fbbf24' : '#f87171';
+        document.getElementById('tankPct').textContent = p.toFixed(1) + '%';
+        document.getElementById('tankPct').style.color = p > 60 ? '#34d399' : p > 30 ? '#fbbf24' : '#f87171';
+    }
 
-                const errEl = document.getElementById('errBanner');
-                const connCard = document.getElementById('connCard');
+    // ── Status pill ───────────────────────────────────────────
+    function setStatus(state, label) {
+        const pill = document.getElementById('statusPill');
+        pill.className = 'ls-status-pill ' + state;
+        document.getElementById('statusText').textContent = label;
+    }
 
-                document.getElementById('connPort').textContent = `${s.port} @ ${s.baudrate} baud`;
-                document.getElementById('linesRead').textContent = s.linesRead ?? 0;
+    // ── Connection card ───────────────────────────────────────
+    function setConnCard(state, label, sub) {
+        const icon = document.getElementById('connIcon');
+        document.getElementById('connValue').textContent = label;
+        document.getElementById('connSub').textContent   = sub;
+        const themes = {
+            online:  { bg: 'rgba(52,211,153,0.15)',  color: '#34d399' },
+            offline: { bg: 'rgba(248,113,113,0.15)', color: '#f87171' },
+            waiting: { bg: 'rgba(251,191,36,0.15)',  color: '#fbbf24' },
+        };
+        const t = themes[state] || themes.waiting;
+        icon.style.background = t.bg;
+        icon.style.color      = t.color;
+    }
 
-                if (s.error && !s.connected) {
-                    errEl.style.display = 'flex';
-                    errEl.innerHTML = '<i class="fas fa-plug-circle-xmark"></i> ' + s.error;
-                    document.getElementById('connStatus').textContent = 'Offline';
-                    connCard.style.background = 'linear-gradient(145deg, rgba(248, 113, 113, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%)';
+    // ── Format timestamp ──────────────────────────────────────
+    function fmtTime(iso) {
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch { return iso; }
+    }
+
+    // ── Poll ──────────────────────────────────────────────────
+    async function poll() {
+        try {
+            const res = await fetch('/api/arduino/live');
+            const s   = await res.json();
+
+            // Port info
+            document.getElementById('portLabel').textContent = s.port     || '—';
+            document.getElementById('baudLabel').textContent = s.baudrate || '—';
+            document.getElementById('infoPort').textContent  = s.port     || '—';
+            document.getElementById('infoBaud').textContent  = s.baudrate ? s.baudrate + ' baud' : '—';
+
+            // Packets
+            const pkts = s.linesRead ?? 0;
+            document.getElementById('packetsValue').textContent = pkts.toLocaleString();
+            document.getElementById('infoPackets').textContent  = pkts.toLocaleString();
+
+            // Connection state
+            const errBanner = document.getElementById('errBanner');
+            if (!s.connected) {
+                const msg = friendlyError(s.error);
+                if (msg) {
+                    errBanner.style.display = 'flex';
+                    document.getElementById('errMsg').textContent = msg;
                 } else {
-                    if (s.error) {
-                        errEl.style.display = 'flex';
-                        errEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' + s.error;
-                    } else {
-                        errEl.style.display = 'none';
-                    }
-                    document.getElementById('connStatus').textContent = s.connected ? 'Connected' : 'Waiting';
-                    connCard.style.background = '';
+                    errBanner.style.display = 'none';
                 }
-
-                if (s.value != null) {
-                    document.getElementById('liveValue').textContent = s.value;
-                }
-                document.getElementById('rawLine').textContent = s.rawLine != null ? s.rawLine : '—';
-                document.getElementById('lastAt').textContent = s.lastAt ? `at ${s.lastAt}` : '—';
-
-                const hist = s.history || [];
-                const labels = hist.map((p, i) => {
-                    if (!p.t) return String(i);
-                    const d = new Date(p.t);
-                    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                });
-                const values = hist.map((p) => p.v);
-                const t = trimHistory(labels, values);
-
-                const ctx = document.getElementById('liveChart').getContext('2d');
-                if (!chart) {
-                    chart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: t.labels,
-                            datasets: [{
-                                label: 'Sensor value',
-                                data: t.data,
-                                borderColor: '#22d3ee',
-                                backgroundColor: 'rgba(34, 211, 238, 0.15)',
-                                fill: true,
-                                tension: 0.25,
-                                pointRadius: 2
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            animation: false,
-                            scales: {
-                                x: { ticks: { maxTicksLimit: 12 } },
-                                y: { beginAtZero: false }
-                            }
-                        }
-                    });
-                } else {
-                    chart.data.labels = t.labels;
-                    chart.data.datasets[0].data = t.data;
-                    chart.update('none');
-                }
-            } catch (e) {
-                document.getElementById('errBanner').style.display = 'flex';
-                document.getElementById('errBanner').textContent = 'Request failed: ' + e.message;
+                setStatus('offline', 'Offline');
+                setConnCard('offline', 'Offline', 'Sensor not connected');
+                document.getElementById('infoStatus').textContent = 'Offline';
+                document.getElementById('infoStatus').style.color = '#f87171';
+            } else {
+                errBanner.style.display = 'none';
+                setStatus('online', 'Online');
+                setConnCard('online', 'Online', 'Receiving data');
+                document.getElementById('infoStatus').textContent = 'Online';
+                document.getElementById('infoStatus').style.color = '#34d399';
             }
-        }
 
-        poll();
-        setInterval(poll, 700);
+            // Water level value
+            const level = s.value;
+            if (level != null) {
+                const pct = Math.min(100, Math.max(0, level));
+                document.getElementById('levelValue').textContent = pct.toFixed(1) + '%';
+                setTankBar(pct);
+                document.getElementById('readLevel').textContent = pct.toFixed(1) + '%';
+
+                // Distance: if raw ADC value available use it, else estimate from %
+                // sensor typically maps 0–400cm range; derive from inverted %
+                const dist = s.rawAdc != null
+                    ? (s.rawAdc / 1023 * 400).toFixed(1)
+                    : ((1 - pct / 100) * 400).toFixed(1);
+                document.getElementById('distValue').textContent  = dist + ' cm';
+                document.getElementById('readDist').textContent   = dist + ' cm';
+            } else {
+                document.getElementById('levelValue').textContent = '—';
+                document.getElementById('distValue').textContent  = '—';
+                document.getElementById('readLevel').textContent  = '—';
+                document.getElementById('readDist').textContent   = '—';
+            }
+
+            // Last reading meta
+            document.getElementById('readTime').textContent = fmtTime(s.lastAt);
+            document.getElementById('readRaw').textContent  = s.rawLine || '—';
+
+            // Chart
+            const hist   = s.history || [];
+            const labels = hist.map(p => fmtTime(p.t));
+            const values = hist.map(p => Math.min(100, Math.max(0, p.v)));
+            const trimmed = hist.length > MAX_POINTS
+                ? { labels: labels.slice(-MAX_POINTS), values: values.slice(-MAX_POINTS) }
+                : { labels, values };
+
+            if (!chart) {
+                chart = new Chart(document.getElementById('liveChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: trimmed.labels,
+                        datasets: [{
+                            label: 'Water Level (%)',
+                            data: trimmed.values,
+                            borderColor: '#22d3ee',
+                            backgroundColor: 'rgba(34,211,238,0.1)',
+                            fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true, animation: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { maxTicksLimit: 10, maxRotation: 0 } },
+                            y: { min: 0, max: 100,
+                                 title: { display: true, text: 'Water Level (%)' },
+                                 ticks: { callback: v => v + '%' } }
+                        }
+                    }
+                });
+            } else {
+                chart.data.labels                  = trimmed.labels;
+                chart.data.datasets[0].data        = trimmed.values;
+                chart.update('none');
+            }
+
+        } catch {
+            setStatus('offline', 'Offline');
+            setConnCard('offline', 'Offline', 'Cannot reach server');
+            const errBanner = document.getElementById('errBanner');
+            errBanner.style.display = 'flex';
+            document.getElementById('errMsg').textContent = 'Cannot reach the AquaTrack server. Make sure app.py is running.';
+        }
+    }
+
+    poll();
+    setInterval(poll, 1000);
     </script>
 </body>
 </html>

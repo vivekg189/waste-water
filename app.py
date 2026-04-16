@@ -1,19 +1,72 @@
 from flask import Flask, render_template, request, jsonify
 import json
 import os
+import threading
+import time
 from datetime import datetime
 from collections import defaultdict
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from serial_reader import ArduinoSerialSource
 
 app = Flask(__name__)
 DATA_FILE = 'data/water_data.json'
 
-SERIAL_PORT = os.environ.get('ARDUINO_PORT', 'COM9')
+SERIAL_PORT = os.environ.get('ARDUINO_PORT', 'COM4')
 SERIAL_BAUD = int(os.environ.get('ARDUINO_BAUD', '9600'))
 arduino_source = ArduinoSerialSource(SERIAL_PORT, SERIAL_BAUD)
+arduino_source.start()
+
+_last_saved_ts = None
+_save_lock = threading.Lock()
+
+def _sensor_save_loop():
+    """Every 10 s, flush any new sensor readings from history into water_data.json."""
+    global _last_saved_ts
+    while True:
+        time.sleep(10)
+        try:
+            snap = arduino_source.snapshot()
+            if not snap['connected'] or not snap['history']:
+                continue
+            with _save_lock:
+                all_data = load_data()
+                # find points newer than last saved timestamp
+                new_points = [
+                    p for p in snap['history']
+                    if _last_saved_ts is None or p['t'] > _last_saved_ts
+                ]
+                if not new_points:
+                    continue
+                prev_level = new_points[0]['v']
+                for p in new_points:
+                    curr_level = p['v']
+                    now = datetime.fromisoformat(p['t'])
+                    all_data.append({
+                        'date': now.strftime('%Y-%m-%d'),
+                        'time': now.strftime('%H:%M'),
+                        'tankCapacity': 100.0,
+                        'prevLevel': round(prev_level, 2),
+                        'currLevel': round(curr_level, 2),
+                        'waterUsed': round(max(prev_level - curr_level, 0), 2),
+                        'students': 1,
+                        'area': 'Sensor',
+                        'block': 'Arduino',
+                        'source': 'live',
+                        'timestamp': p['t']
+                    })
+                    prev_level = curr_level
+                _last_saved_ts = new_points[-1]['t']
+                save_data(all_data)
+        except Exception:
+            pass
+
+threading.Thread(target=_sensor_save_loop, daemon=True, name='SensorSave').start()
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -68,6 +121,7 @@ def submit_data():
         'students': int(data['students']),
         'area': data['area'],
         'block': data['block'],
+        'remarks': data.get('remarks', ''),
         'timestamp': datetime.now().isoformat()
     }
     
@@ -77,18 +131,28 @@ def submit_data():
     
     return jsonify({'success': True, 'waterUsed': water_used})
 
+@app.route('/api/dates')
+def get_dates():
+    data = load_data()
+    dates  = sorted(set(d['date']  for d in data), reverse=True)
+    blocks = sorted(set(d['block'] for d in data))
+    return jsonify({'dates': dates, 'blocks': blocks})
+
 @app.route('/api/analytics')
 def analytics():
     data = load_data()
     if not data:
         return jsonify({'error': 'No data available'})
     
-    # Filter by date if provided
-    filter_date = request.args.get('date')
-    if filter_date:
-        data = [d for d in data if d['date'] == filter_date]
-        if not data:
-            return jsonify({'error': f'No data available for {filter_date}'})
+    # Filter by date / block / zone if provided
+    filter_date  = request.args.get('date')
+    filter_block = request.args.get('block')
+    filter_zone  = request.args.get('zone')
+    if filter_date:  data = [d for d in data if d['date']  == filter_date]
+    if filter_block: data = [d for d in data if d['block'] == filter_block]
+    if filter_zone:  data = [d for d in data if d['area']  == filter_zone]
+    if not data:
+        return jsonify({'error': 'No data available for the selected filters'})
     
     total_usage = sum(d['waterUsed'] for d in data)
     total_students = sum(d['students'] for d in data)
@@ -112,7 +176,19 @@ def analytics():
         daily_usage[d['date']] += d['waterUsed']
     
     # Time series data
-    time_series = [{'time': d['time'], 'usage': d['waterUsed'], 'date': d['date']} for d in data]
+    time_series = [{'time': d['time'], 'usage': d['waterUsed'], 'date': d['date'],
+                    'currLevel': d['currLevel'], 'prevLevel': d['prevLevel']} for d in data]
+
+    # Refill detection — currLevel > prevLevel means tank was refilled
+    refill_events = []
+    for d in data:
+        refill_amt = d['currLevel'] - d['prevLevel']
+        if refill_amt > 0:
+            refill_events.append({
+                'date': d['date'], 'time': d['time'],
+                'amount': round(refill_amt, 2),
+                'label': f"+{round(refill_amt)}L refill"
+            })
     
     # Abnormal usage detection
     avg_usage = total_usage / len(data)
@@ -348,8 +424,98 @@ def analytics():
         'timeOfDayUsage': {k: round(v, 2) for k, v in tod_usage.items()},
         'benchmarkTargetLow': benchmark_target_low,
         'benchmarkTargetHigh': benchmark_target_high,
-        'conservationSteps': conservation_steps
+        'conservationSteps': conservation_steps,
+        'latestTankPct': round(data[-1]['currLevel'] / data[-1]['tankCapacity'] * 100, 1) if data and data[-1].get('tankCapacity') else None,
+        'refillEvents': refill_events
     })
+
+@app.route('/api/ai-suggestions', methods=['POST'])
+def ai_suggestions():
+    groq_key = os.environ.get('GROQ_API_KEY', '')
+    if not groq_key:
+        return jsonify({'error': 'GROQ_API_KEY not set in .env'}), 500
+
+    d = request.json or {}
+
+    # convert JSON data to natural language for better AI understanding
+    leakage_text = 'Yes — immediate inspection required' if d.get('abnormal') else 'No'
+    efficiency    = d.get('efficiencyScore', 'N/A')
+    category      = d.get('efficiencyCategory', 'N/A')
+    per_person    = d.get('avgPerStudent', 'N/A')
+    total         = d.get('totalUsage', 'N/A')
+    peak          = d.get('peakTime', 'N/A')
+    zone          = d.get('topZone', 'N/A')
+
+    natural_language = (
+        f"Total water usage is {total} liters. "
+        f"There are residents using an average of {per_person} liters per person. "
+        f"The peak usage hour is {peak}. "
+        f"Leakage detected: {leakage_text}. "
+        f"The water efficiency score is {efficiency}% which is rated as {category}. "
+        f"The highest water consuming zone is {zone}."
+    )
+
+    prompt = (
+        f"Analyze the following hostel water usage data:\n\n"
+        f"{natural_language}\n\n"
+        f"Based on this data, provide exactly 3 short and actionable water conservation suggestions.\n"
+        f"Each suggestion must be one clear sentence.\n"
+        f"If leakage is detected, one suggestion must be a leakage alert.\n\n"
+        f"Respond using this exact JSON format:\n"
+        f'{{"suggestions": ['
+        f'{{"type": "tip", "text": "suggestion one"}}, '
+        f'{{"type": "alert", "text": "suggestion two"}}, '
+        f'{{"type": "recommendation", "text": "suggestion three"}}'
+        f']}}'
+    )
+
+    try:
+        client = Groq(api_key=groq_key)
+        chat = client.chat.completions.create(
+            model='llama-3.1-8b-instant',
+            messages=[
+                {'role': 'system', 'content': 'You are a water conservation expert. You only output valid JSON arrays. Never include markdown, explanations, or any text outside the JSON array.'},
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.2,
+            max_tokens=400,
+            response_format={'type': 'json_object'}
+        )
+        raw = chat.choices[0].message.content.strip()
+        print('GROQ RAW RESPONSE:', repr(raw))  # debug
+
+        # strip markdown code fences
+        raw = raw.replace('```json', '').replace('```', '').strip()
+
+        # json_object mode may wrap array: {"suggestions": [...]} or {"data": [...]}
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            suggestions = parsed
+        elif isinstance(parsed, dict):
+            # grab first list value found
+            suggestions = next((v for v in parsed.values() if isinstance(v, list)), [])
+        else:
+            raise ValueError(f'Unexpected response structure: {raw[:200]}')
+
+        # validate each item has required keys
+        valid_types = {'tip', 'alert', 'recommendation'}
+        cleaned = []
+        for s in suggestions:
+            if isinstance(s, dict) and 'text' in s:
+                cleaned.append({
+                    'type': s.get('type', 'tip') if s.get('type') in valid_types else 'tip',
+                    'text': str(s['text'])
+                })
+        if not cleaned:
+            raise ValueError('No valid suggestions parsed from response')
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'suggestions': cleaned})
+
 
 @app.route('/api/predict')
 def predict():

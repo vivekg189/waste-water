@@ -95,7 +95,12 @@ class ArduinoSerialSource:
                     self._latest["last_iso"] = now_iso
                     self._lines_read += 1
                     if val is not None:
+                        raw_val = val
+                        # Invert raw 10-bit ADC: 1023=dry(0%), 0=full(100%)
+                        if val <= 1023 and (val > 100 or val == 0):
+                            val = round((1 - val / 1023.0) * 100, 2)
                         self._latest["value"] = val
+                        self._latest["raw_adc"] = raw_val
                         self._history.append({"t": now_iso, "v": val})
             except Exception as e:
                 with self._lock:

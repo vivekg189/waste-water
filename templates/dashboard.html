@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -19,429 +20,604 @@
                 <li><a href="/">Home</a></li>
                 <li><a href="/form">Data Entry</a></li>
                 <li><a href="/dashboard" class="active">Dashboard</a></li>
-                <li><a href="/live-sensor">Live sensor</a></li>
+                <li><a href="/live-sensor">Live Sensor</a></li>
                 <li><a href="/prediction">Prediction</a></li>
             </ul>
         </div>
     </nav>
 
     <div class="container">
-        <header class="page-header">
-            <h1>Usage intelligence</h1>
-            <p class="subtitle">Filter by date for a focused slice, or view everything to compare blocks, zones, and peaks.</p>
+        <header class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;">
+            <div>
+                <h1>Dashboard</h1>
+                <p class="subtitle">Water usage analytics with refill &amp; leakage detection.</p>
+            </div>
+            <button class="btn-export" id="btnExport"><i class="fas fa-download"></i> Export CSV</button>
         </header>
 
-        <div class="filter-section glass-card">
-            <label for="dateFilter">Date</label>
-            <input type="date" id="dateFilter" />
-            <button type="button" class="btn-filter" id="btnApplyFilter">Apply</button>
-            <button type="button" class="btn-clear" id="btnClearFilter">All data</button>
+        <!-- Filters -->
+        <div class="db-filters glass-card">
+            <div class="filter-group">
+                <label><i class="fas fa-calendar"></i> Date</label>
+                <input type="date" id="dateFilter">
+            </div>
+            <div class="filter-actions">
+                <button class="btn-filter" id="btnApplyFilter">Apply</button>
+                <button class="btn-clear"  id="btnClearFilter">Reset</button>
+            </div>
+            <div id="datePills" class="date-pills"></div>
         </div>
 
-        <div id="dashboardError" class="glass-card error" style="display: none; border: 1px solid rgba(248, 113, 113, 0.35);"></div>
-        <div id="alertBox" class="alert" style="display: none;"></div>
+        <!-- Error -->
+        <div id="dashboardError" class="db-error" style="display:none;"></div>
 
-        <h2 class="section-title">Sustainability snapshot</h2>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total usage (filtered)</h3>
-                <p class="stat-value" id="totalUsage">—</p>
-                <p class="stat-label">liters in selection</p>
+        <!-- Alert banners -->
+        <div id="alertsSection" style="display:none;">
+            <div id="alertLeak"  class="db-alert db-alert--danger"  style="display:none;"><i class="fas fa-droplet"></i><span></span></div>
+            <div id="alertLow"   class="db-alert db-alert--warning" style="display:none;"><i class="fas fa-triangle-exclamation"></i><span></span></div>
+            <div id="alertHigh"  class="db-alert db-alert--warning" style="display:none;"><i class="fas fa-fire"></i><span></span></div>
+        </div>
+
+        <!-- Top 4 stat cards -->
+        <div class="db-summary-grid db-summary-grid--4">
+            <!-- Tank Level -->
+            <div class="db-stat-card" id="tankLevelCard">
+                <div class="db-stat-icon" id="tankLevelIcon" style="background:rgba(34,211,238,0.15);color:#22d3ee;">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div>
+                    <div class="db-stat-label">Tank Level</div>
+                    <div class="db-stat-value" id="tankLevelPct">—</div>
+                    <div class="db-stat-sub" id="tankLevelSub">—</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Last 7 days</h3>
-                <p class="stat-value" id="weeklyUsage">—</p>
-                <p class="stat-label">liters</p>
+            <!-- Total Usage -->
+            <div class="db-stat-card">
+                <div class="db-stat-icon" style="background:rgba(34,211,238,0.15);color:#22d3ee;">
+                    <i class="fas fa-droplet"></i>
+                </div>
+                <div>
+                    <div class="db-stat-label">Total Usage</div>
+                    <div class="db-stat-value" id="totalUsage">—</div>
+                    <div class="db-stat-sub">liters in selection</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Change vs prior day</h3>
-                <p class="stat-value" id="waterSaved">—</p>
-                <p class="stat-label">positive = less use</p>
+            <!-- Efficiency Score -->
+            <div class="db-stat-card">
+                <div class="db-stat-icon" style="background:rgba(52,211,153,0.15);color:#34d399;">
+                    <i class="fas fa-gauge-high"></i>
+                </div>
+                <div>
+                    <div class="db-stat-label">Efficiency Score</div>
+                    <div class="db-stat-value" id="efficiencyScore">—</div>
+                    <div class="db-stat-sub" id="efficiencyCategory">—</div>
+                </div>
             </div>
-            <div class="stat-card efficiency-card" id="efficiencyCard">
-                <h3>Efficiency score</h3>
-                <p class="stat-value" id="efficiencyScore">—</p>
-                <p class="stat-label" id="efficiencyCategory">—</p>
+            <!-- Leakage Status -->
+            <div class="db-stat-card">
+                <div class="db-stat-icon" id="leakageIcon" style="background:rgba(52,211,153,0.15);color:#34d399;">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div>
+                    <div class="db-stat-label">Leakage Status</div>
+                    <div class="db-stat-value" id="leakageStatus">—</div>
+                    <div class="db-stat-sub" id="leakageSub">—</div>
+                </div>
             </div>
         </div>
 
-        <h2 class="section-title">Operational signals</h2>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Peak hour</h3>
-                <p class="stat-value" id="peakTime">—</p>
-                <p class="stat-label">heavy draw</p>
-            </div>
-            <div class="stat-card">
-                <h3>Liters / person</h3>
-                <p class="stat-value" id="avgPerStudent">—</p>
-                <p class="stat-label">in filtered set</p>
-            </div>
-            <div class="stat-card">
-                <h3>Daily footprint / student</h3>
-                <p class="stat-value" id="perStudentDaily">—</p>
-                <p class="stat-label">L / person / day (est.)</p>
-            </div>
-            <div class="stat-card" id="tankRefillCard">
-                <h3>Tank runway</h3>
-                <p class="stat-value" id="tankRefillHours">—</p>
-                <p class="stat-label">hours at recent pace</p>
-            </div>
+        <!-- Refill Events Panel -->
+        <div class="glass-card refill-panel" id="refillPanel" style="display:none;">
+            <h3 class="db-card-title"><i class="fas fa-fill-drip" style="color:#38bdf8;"></i> Refill Events Detected</h3>
+            <div id="refillList" class="refill-list"></div>
         </div>
 
-        <div class="chart-panel chart-full" style="margin-top: 1.5rem;">
-            <h3><i class="fas fa-fire"></i> Hourly intensity (24h)</h3>
-            <canvas id="heatmapChart" height="100"></canvas>
-        </div>
-
-        <div class="charts-grid">
+        <!-- Charts: 2-column grid -->
+        <div class="charts-grid charts-grid--2" style="margin-top:1.25rem;">
+            <!-- 1. Water Level Over Time (full width) -->
+            <div class="chart-panel chart-full">
+                <h3><i class="fas fa-chart-line"></i> Water Level Over Time</h3>
+                <canvas id="levelChart" height="90"></canvas>
+            </div>
+            <!-- 2. Hourly Usage Pattern -->
             <div class="chart-panel">
-                <h3><i class="fas fa-wave-square"></i> Usage over readings</h3>
-                <canvas id="timeChart"></canvas>
+                <h3><i class="fas fa-clock"></i> Hourly Usage Pattern</h3>
+                <canvas id="hourlyChart"></canvas>
             </div>
+            <!-- 3. Daily Usage Trend -->
             <div class="chart-panel">
-                <h3><i class="fas fa-chart-column"></i> Daily totals</h3>
+                <h3><i class="fas fa-calendar-days"></i> Daily Usage Trend</h3>
                 <canvas id="dailyChart"></canvas>
             </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-chart-pie"></i> Share by zone</h3>
-                <canvas id="areaChart"></canvas>
-            </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-calendar-week"></i> Recent daily trend</h3>
-                <canvas id="weeklyChart"></canvas>
-            </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-building"></i> Usage by block</h3>
-                <canvas id="blockChart"></canvas>
-            </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-sun"></i> Time-of-day mix</h3>
-                <canvas id="todChart"></canvas>
-            </div>
-            <div class="chart-panel">
-                <h3><i class="fas fa-person"></i> Benchmark: liters / student</h3>
-                <canvas id="benchmarkChart"></canvas>
+            <!-- 4. Usage per Person -->
+            <div class="chart-panel chart-full">
+                <h3><i class="fas fa-person"></i> Usage per Person vs Target</h3>
+                <canvas id="perPersonChart" height="80"></canvas>
             </div>
         </div>
 
-        <section class="conservation-section">
-            <h2 class="section-title" style="margin-top: 0;">Conservation playbook</h2>
-            <p class="subtitle" style="margin-bottom: 1.25rem;">Ordered by relevance to your current data. Share as a checklist in common rooms.</p>
-            <div id="conservationGrid" class="conservation-grid"></div>
+        <!-- Conservation Measures -->
+        <section id="conservationSection" style="margin-top:2rem;">
+            <h2 class="section-title"><i class="fas fa-leaf"></i> Conservation Measures</h2>
+            <div id="conservationCards" class="conservation-measures-grid"></div>
         </section>
 
-        <section class="suggestions-section">
-            <h2 class="section-title" style="margin-top: 0;"><i class="fas fa-robot"></i> Automated observations</h2>
-            <ul id="suggestionsList" class="suggestions-list"></ul>
+        <!-- Smart Insights -->
+        <section style="margin-top:2rem;">
+            <h2 class="section-title"><i class="fas fa-lightbulb"></i> Smart Insights</h2>
+            <div id="insightsGrid" class="insights-grid"></div>
+        </section>
+
+        <!-- AI Suggestions -->
+        <section style="margin-top:2rem;">
+            <h2 class="section-title"><i class="fas fa-brain"></i> AI Suggestions
+                <button class="ai-refresh-btn" id="btnAiRefresh" title="Refresh AI suggestions">
+                    <i class="fas fa-rotate-right" id="aiRefreshIcon"></i>
+                </button>
+            </h2>
+            <div id="aiSuggestionsBox">
+                <div class="ai-placeholder"><i class="fas fa-spinner fa-spin"></i> Generating AI suggestions…</div>
+            </div>
         </section>
     </div>
 
     <footer class="site-footer">Charts use local readings only — no external telemetry</footer>
 
     <script>
-        const chartText = '#cbd5e1';
-        const chartGrid = 'rgba(148, 163, 184, 0.12)';
-        Chart.defaults.color = chartText;
-        Chart.defaults.borderColor = chartGrid;
-        Chart.defaults.font.family = '"DM Sans", "Segoe UI", system-ui, sans-serif';
+    const chartText = '#cbd5e1', chartGrid = 'rgba(148,163,184,0.12)';
+    Chart.defaults.color = chartText;
+    Chart.defaults.borderColor = chartGrid;
+    Chart.defaults.font.family = '"DM Sans","Segoe UI",system-ui,sans-serif';
 
-        let timeChart, dailyChart, areaChart, heatmapChart, weeklyChart, blockChart, todChart, benchmarkChart;
+    let levelChart, hourlyChart, dailyChart, perPersonChart;
+    let _lastData = null;
 
-        function setEfficiencyCard(category) {
-            const card = document.getElementById('efficiencyCard');
-            const gradients = {
-                Excellent: 'linear-gradient(145deg, rgba(52, 211, 153, 0.35) 0%, rgba(15, 23, 42, 0.95) 100%)',
-                Moderate: 'linear-gradient(145deg, rgba(251, 191, 36, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%)',
-                Poor: 'linear-gradient(145deg, rgba(248, 113, 113, 0.25) 0%, rgba(15, 23, 42, 0.95) 100%)'
+    function destroyCharts() {
+        [levelChart, hourlyChart, dailyChart, perPersonChart].forEach(c => c && c.destroy());
+    }
+
+    // ── Refill panel ──────────────────────────────────────────
+    function renderRefillPanel(refills) {
+        const panel = document.getElementById('refillPanel');
+        const list  = document.getElementById('refillList');
+        if (!refills || !refills.length) { panel.style.display = 'none'; return; }
+        panel.style.display = 'block';
+        list.innerHTML = refills.map(r => `
+            <div class="refill-item">
+                <span class="refill-badge"><i class="fas fa-fill-drip"></i> Refill</span>
+                <span class="refill-time"><i class="fas fa-calendar"></i> ${r.date} &nbsp;<i class="fas fa-clock"></i> ${r.time}</span>
+                <span class="refill-amount">+${r.amount.toLocaleString()} L</span>
+            </div>`).join('');
+    }
+
+    // ── Alerts ────────────────────────────────────────────────
+    function renderAlerts(data) {
+        const sec  = document.getElementById('alertsSection');
+        const leak = document.getElementById('alertLeak');
+        const low  = document.getElementById('alertLow');
+        const high = document.getElementById('alertHigh');
+        let any = false;
+
+        if (data.abnormal) {
+            leak.querySelector('span').textContent = 'Leakage alert — abnormal spike detected. Check meters and taps.';
+            leak.style.display = 'flex'; any = true;
+        } else { leak.style.display = 'none'; }
+
+        if (data.tankRefillHours != null && data.tankRefillHours < 3) {
+            low.querySelector('span').textContent = `Low water level — tank will run out in ~${data.tankRefillHours}h at current pace.`;
+            low.style.display = 'flex'; any = true;
+        } else { low.style.display = 'none'; }
+
+        if (data.avgPerStudent > 150) {
+            high.querySelector('span').textContent = `High consumption — ${data.avgPerStudent.toFixed(0)} L/person exceeds the 120 L/day guideline.`;
+            high.style.display = 'flex'; any = true;
+        } else { high.style.display = 'none'; }
+
+        sec.style.display = any ? 'flex' : 'none';
+    }
+
+    // ── Insights ──────────────────────────────────────────────
+    function renderInsights(data) {
+        const grid = document.getElementById('insightsGrid');
+        grid.innerHTML = '';
+        const insights = [];
+
+        if (data.abnormal)
+            insights.push({ icon:'fa-droplet', color:'danger', title:'Possible Leakage', msg:'Abnormal spike detected. Inspect taps and overflow pipes immediately.' });
+
+        if ((data.refillEvents || []).length)
+            insights.push({ icon:'fa-fill-drip', color:'success', title:`${data.refillEvents.length} Refill(s) Detected`, msg:`Tank was refilled ${data.refillEvents.length} time(s). Total added: ${data.refillEvents.reduce((s,r)=>s+r.amount,0).toLocaleString()} L.` });
+
+        if (data.waterSaved > 0)
+            insights.push({ icon:'fa-arrow-trend-down', color:'success', title:'Usage Reduced', msg:`Saved ${data.waterSaved.toFixed(0)} L vs previous day.` });
+        else if (data.waterSaved < 0)
+            insights.push({ icon:'fa-arrow-trend-up', color:'warning', title:'Usage Increased', msg:`Usage rose by ${Math.abs(data.waterSaved).toFixed(0)} L vs yesterday.` });
+
+        if (data.avgPerStudent > 150)
+            insights.push({ icon:'fa-fire', color:'danger', title:'High Consumption', msg:`${data.avgPerStudent.toFixed(0)} L/person exceeds the 120 L/day guideline.` });
+
+        if (data.efficiencyCategory === 'Excellent')
+            insights.push({ icon:'fa-star', color:'success', title:'Excellent Efficiency', msg:'Water usage is well within sustainable limits.' });
+
+        if (!insights.length)
+            insights.push({ icon:'fa-circle-check', color:'success', title:'All Systems Normal', msg:'No anomalies detected in the current selection.' });
+
+        insights.forEach(ins => {
+            const d = document.createElement('div');
+            d.className = `insight-card insight--${ins.color}`;
+            d.innerHTML = `<i class="fas ${ins.icon}"></i><div><strong>${ins.title}</strong><p>${ins.msg}</p></div>`;
+            grid.appendChild(d);
+        });
+    }
+
+    // ── Main load ─────────────────────────────────────────────
+    async function loadDashboard() {
+        const errBox = document.getElementById('dashboardError');
+        errBox.style.display = 'none';
+
+        let data;
+        try {
+            const url = buildUrl();
+            const res = await fetch(url);
+            data = await res.json();
+        } catch {
+            errBox.textContent = 'Could not reach the server.';
+            errBox.style.display = 'block';
+            return;
+        }
+
+        if (data.error) {
+            errBox.textContent = data.error + ' — add readings from Data Entry to populate charts.';
+            errBox.style.display = 'block';
+            return;
+        }
+
+        _lastData = data;
+        destroyCharts();
+
+        // ── Top 4 cards ──
+        const pct = data.latestTankPct;
+        document.getElementById('tankLevelPct').textContent = pct != null ? pct.toFixed(1) + '%' : '—';
+        const tankIcon = document.getElementById('tankLevelIcon');
+        const tankSub  = document.getElementById('tankLevelSub');
+        if (pct != null) {
+            if (pct > 60) { tankIcon.style.background='rgba(52,211,153,0.15)'; tankIcon.style.color='#34d399'; tankSub.textContent='Sufficient'; }
+            else if (pct > 30) { tankIcon.style.background='rgba(251,191,36,0.15)'; tankIcon.style.color='#fbbf24'; tankSub.textContent='Moderate'; }
+            else { tankIcon.style.background='rgba(248,113,113,0.15)'; tankIcon.style.color='#f87171'; tankSub.textContent='Low — refill soon'; }
+        }
+
+        document.getElementById('totalUsage').textContent      = data.totalUsage.toLocaleString() + ' L';
+        document.getElementById('efficiencyScore').textContent  = Math.round(data.efficiencyScore) + '%';
+        document.getElementById('efficiencyCategory').textContent = data.efficiencyCategory;
+
+        const leakIcon = document.getElementById('leakageIcon');
+        const leakStat = document.getElementById('leakageStatus');
+        const leakSub  = document.getElementById('leakageSub');
+        if (data.abnormal) {
+            leakStat.textContent = 'Suspected';
+            leakSub.textContent  = 'Abnormal spike found';
+            leakIcon.style.background = 'rgba(248,113,113,0.15)';
+            leakIcon.style.color = '#f87171';
+        } else {
+            leakStat.textContent = 'Normal';
+            leakSub.textContent  = 'No anomalies detected';
+            leakIcon.style.background = 'rgba(52,211,153,0.15)';
+            leakIcon.style.color = '#34d399';
+        }
+
+        renderAlerts(data);
+        renderInsights(data);
+        renderRefillPanel(data.refillEvents || []);
+
+        // ── 1. Water Level Over Time ──
+        const ts = (data.timeSeries || []).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+        const tsLabels = ts.map(d => `${d.date} ${d.time}`);
+        const tsLevels = ts.map(d => d.currLevel);
+
+        // Refill annotation lines
+        const refillAnnotations = {};
+        (data.refillEvents || []).forEach((r, i) => {
+            const label = `${r.date} ${r.time}`;
+            refillAnnotations[`refill${i}`] = {
+                type: 'line', scaleID: 'x', value: label,
+                borderColor: '#38bdf8', borderWidth: 2, borderDash: [5,4],
+                label: { content: r.label, display: true, position: 'start',
+                         backgroundColor: 'rgba(56,189,248,0.85)', color: '#0f172a',
+                         font: { size: 11, weight: '600' }, padding: { x:6, y:3 }, borderRadius: 4 }
             };
-            card.style.background = gradients[category] || gradients.Moderate;
+        });
+
+        levelChart = new Chart(document.getElementById('levelChart'), {
+            type: 'line',
+            data: {
+                labels: tsLabels,
+                datasets: [{
+                    label: 'Tank Level (L)', data: tsLevels,
+                    borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.08)',
+                    borderWidth: 2, pointRadius: 3, fill: true, tension: 0.35
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    annotation: { annotations: refillAnnotations }
+                },
+                scales: { x: { ticks: { maxTicksLimit: 10, maxRotation: 30 } }, y: { beginAtZero: false } }
+            }
+        });
+
+        // ── 2. Hourly Usage Pattern ──
+        const hmLabels = data.heatmapData.map(d => `${d.hour}:00`);
+        const hmValues = data.heatmapData.map(d => d.usage);
+        const hmMax    = Math.max(...hmValues, 1e-6);
+        hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+            type: 'bar',
+            data: {
+                labels: hmLabels,
+                datasets: [{
+                    label: 'Avg L', data: hmValues,
+                    backgroundColor: hmValues.map(v => { const r=v/hmMax; return r>.7?'#f87171':r>.4?'#fbbf24':'#34d399'; }),
+                    borderRadius: 6
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { maxRotation: 0 } }, y: { beginAtZero: true } } }
+        });
+
+        // ── 3. Daily Usage Trend ──
+        const dailySorted = Object.keys(data.dailyUsage).sort();
+        const dailyValues = dailySorted.map(k => data.dailyUsage[k]);
+        dailyChart = new Chart(document.getElementById('dailyChart'), {
+            type: 'bar',
+            data: {
+                labels: dailySorted,
+                datasets: [{
+                    label: 'Liters', data: dailyValues,
+                    backgroundColor: dailyValues.map((v, i, arr) => {
+                        if (i === 0) return 'rgba(52,211,153,0.65)';
+                        return v > arr[i-1] ? 'rgba(248,113,113,0.65)' : 'rgba(52,211,153,0.65)';
+                    }),
+                    borderRadius: 8
+                }]
+            },
+            options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        });
+
+        // ── 4. Usage per Person vs Target ──
+        const dailyDates = Object.keys(data.dailyUsage).sort();
+        const studentsPerDay = {};
+        (data.timeSeries || []).forEach(d => {
+            if (!studentsPerDay[d.date]) studentsPerDay[d.date] = 0;
+        });
+        // Use avgPerStudent as a single bar vs target
+        perPersonChart = new Chart(document.getElementById('perPersonChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Your Avg (L/person)', 'Target Low (100 L)', 'Target High (120 L)'],
+                datasets: [{
+                    label: 'Liters',
+                    data: [data.avgPerStudent, data.benchmarkTargetLow || 100, data.benchmarkTargetHigh || 120],
+                    backgroundColor: [
+                        data.avgPerStudent > 120 ? 'rgba(248,113,113,0.7)' : data.avgPerStudent > 100 ? 'rgba(251,191,36,0.7)' : 'rgba(52,211,153,0.7)',
+                        'rgba(148,163,184,0.25)',
+                        'rgba(148,163,184,0.35)'
+                    ],
+                    borderRadius: 10
+                }]
+            },
+            options: {
+                indexAxis: 'y', responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true, title: { display: true, text: 'Liters per person' } } }
+            }
+        });
+
+        renderConservationMeasures(data);
+        loadAiSuggestions(data);
+    }
+
+    // ── Conservation Measures ─────────────────────────────────
+    function renderConservationMeasures(data) {
+        const grid = document.getElementById('conservationCards');
+        grid.innerHTML = '';
+
+        const measures = [];
+
+        // 1. Leakage — always critical if detected
+        if (data.abnormal) {
+            measures.push({
+                priority: 'critical',
+                icon: 'fa-triangle-exclamation',
+                title: 'Fix Leakage Immediately',
+                text: 'An abnormal water spike was detected. Inspect all taps, pipes, and overflow valves right now to prevent further loss.',
+                action: 'Inspect pipes & taps'
+            });
         }
 
-        function renderConservationSteps(steps) {
-            const grid = document.getElementById('conservationGrid');
-            grid.innerHTML = '';
-            steps.forEach((s) => {
-                const div = document.createElement('div');
-                div.className = 'conservation-card';
-                div.innerHTML = `
-                    <div class="step-num">${s.step}</div>
-                    <div class="step-body">
-                        <h4><i class="fas ${s.icon}"></i> ${s.title}</h4>
-                        <p>${s.detail}</p>
-                    </div>`;
-                grid.appendChild(div);
+        // 2. High total usage
+        const avgDaily = data.totalUsage / Math.max(Object.keys(data.dailyUsage || {}).length, 1);
+        if (avgDaily > 500) {
+            measures.push({
+                priority: 'warning',
+                icon: 'fa-droplet',
+                title: 'Reduce Peak-Hour Usage',
+                text: `Daily average is ${avgDaily.toFixed(0)} L. Stagger activities like bathing and laundry to avoid simultaneous high-draw periods.`,
+                action: 'Stagger schedules'
             });
         }
 
-        function clearFilter() {
-            document.getElementById('dateFilter').value = '';
-            loadDashboard();
+        // 3. High usage per person
+        if (data.avgPerStudent > 120) {
+            measures.push({
+                priority: data.avgPerStudent > 150 ? 'critical' : 'warning',
+                icon: 'fa-person',
+                title: 'Optimize Usage per Person',
+                text: `Current average is ${data.avgPerStudent.toFixed(0)} L/person. The recommended limit is 120 L/day. Encourage shorter showers and tap discipline.`,
+                action: 'Target: 100–120 L/person'
+            });
         }
 
-        async function loadDashboard() {
-            const errBox = document.getElementById('dashboardError');
-            errBox.style.display = 'none';
-            const selectedDate = document.getElementById('dateFilter').value;
-            const url = selectedDate ? `/api/analytics?date=${encodeURIComponent(selectedDate)}` : '/api/analytics';
-
-            let data;
-            try {
-                const response = await fetch(url);
-                data = await response.json();
-            } catch (e) {
-                errBox.textContent = 'Could not reach the server. Check your connection and try again.';
-                errBox.style.display = 'block';
-                return;
-            }
-
-            if (data.error) {
-                errBox.textContent = data.error + ' Add readings from Data Entry to populate charts.';
-                errBox.style.display = 'block';
-                return;
-            }
-
-            if (timeChart) timeChart.destroy();
-            if (dailyChart) dailyChart.destroy();
-            if (areaChart) areaChart.destroy();
-            if (heatmapChart) heatmapChart.destroy();
-            if (weeklyChart) weeklyChart.destroy();
-            if (blockChart) blockChart.destroy();
-            if (todChart) todChart.destroy();
-            if (benchmarkChart) benchmarkChart.destroy();
-
-            document.getElementById('totalUsage').textContent = data.totalUsage.toLocaleString();
-            document.getElementById('weeklyUsage').textContent = data.weeklyUsage.toLocaleString();
-            const ws = data.waterSaved;
-            const wsEl = document.getElementById('waterSaved');
-            wsEl.textContent = (ws >= 0 ? '+' : '') + Number(ws).toFixed(0) + ' L';
-            wsEl.style.color = ws >= 0 ? 'var(--success)' : 'var(--danger)';
-
-            document.getElementById('efficiencyScore').textContent = Math.round(data.efficiencyScore);
-            document.getElementById('efficiencyCategory').textContent = data.efficiencyCategory;
-            setEfficiencyCard(data.efficiencyCategory);
-
-            document.getElementById('peakTime').textContent = data.peakTime;
-            document.getElementById('avgPerStudent').textContent = Number(data.avgPerStudent).toFixed(1);
-            document.getElementById('perStudentDaily').textContent = Number(data.perStudentDaily).toFixed(2);
-
-            const tankCard = document.getElementById('tankRefillCard');
-            tankCard.style.background = '';
-            if (data.tankRefillHours != null) {
-                document.getElementById('tankRefillHours').textContent = data.tankRefillHours;
-                if (data.tankRefillHours < 2) {
-                    tankCard.style.background = 'linear-gradient(145deg, rgba(248, 113, 113, 0.28) 0%, rgba(15, 23, 42, 0.95) 100%)';
-                }
-            } else {
-                document.getElementById('tankRefillHours').textContent = '—';
-            }
-
-            const alertBox = document.getElementById('alertBox');
-            if (data.abnormal) {
-                alertBox.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Possible leak or abnormal single-entry spike — verify taps, overflows, and meters.';
-                alertBox.style.display = 'flex';
-            } else {
-                alertBox.style.display = 'none';
-            }
-
-            const heatmapLabels = data.heatmapData.map((d) => `${d.hour}:00`);
-            const heatmapValues = data.heatmapData.map((d) => d.usage);
-            const maxHeatmap = Math.max(...heatmapValues, 1e-6);
-            const heatmapColors = heatmapValues.map((v) => {
-                const r = v / maxHeatmap;
-                if (r > 0.7) return '#f87171';
-                if (r > 0.4) return '#fbbf24';
-                return '#34d399';
+        // 4. Low efficiency
+        if (data.efficiencyCategory === 'Poor') {
+            measures.push({
+                priority: 'warning',
+                icon: 'fa-gauge-high',
+                title: 'Improve Efficiency Score',
+                text: `Efficiency is rated Poor (${Math.round(data.efficiencyScore)}%). Review high-consumption zones and enforce usage limits per block.`,
+                action: 'Audit consumption zones'
             });
+        }
 
-            heatmapChart = new Chart(document.getElementById('heatmapChart'), {
-                type: 'bar',
-                data: {
-                    labels: heatmapLabels,
-                    datasets: [{
-                        label: 'Avg L',
-                        data: heatmapValues,
-                        backgroundColor: heatmapColors,
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { maxRotation: 0 } },
-                        y: { beginAtZero: true }
-                    }
-                }
+        // 5. Tank running low
+        if (data.tankRefillHours != null && data.tankRefillHours < 6) {
+            measures.push({
+                priority: data.tankRefillHours < 3 ? 'critical' : 'warning',
+                icon: 'fa-database',
+                title: 'Conserve — Tank Running Low',
+                text: `Only ~${data.tankRefillHours}h of water remains at the current rate. Limit non-essential usage until the tank is refilled.`,
+                action: 'Limit non-essential use'
             });
+        }
 
-            const timeLabels = data.timeSeries.map((d) => `${d.date} ${d.time}`);
-            const timeData = data.timeSeries.map((d) => d.usage);
-            const avgUsage = timeData.reduce((a, b) => a + b, 0) / (timeData.length || 1);
-            const pointColors = timeData.map((v) => (v > avgUsage * 1.4 ? '#f87171' : '#22d3ee'));
-
-            timeChart = new Chart(document.getElementById('timeChart'), {
-                type: 'line',
-                data: {
-                    labels: timeLabels,
-                    datasets: [{
-                        label: 'Liters',
-                        data: timeData,
-                        borderColor: '#22d3ee',
-                        backgroundColor: 'rgba(34, 211, 238, 0.08)',
-                        tension: 0.35,
-                        fill: true,
-                        pointBackgroundColor: pointColors,
-                        pointRadius: 5
-                    }]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true } } }
-            });
-
-            const dailySorted = Object.keys(data.dailyUsage).sort();
-            const dailyData = dailySorted.map((k) => data.dailyUsage[k]);
-            dailyChart = new Chart(document.getElementById('dailyChart'), {
-                type: 'bar',
-                data: {
-                    labels: dailySorted,
-                    datasets: [{
-                        label: 'Liters',
-                        data: dailyData,
-                        backgroundColor: 'rgba(52, 211, 153, 0.65)',
-                        borderRadius: 8
-                    }]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true } } }
-            });
-
-            const areaLabels = Object.keys(data.areaUsage);
-            const areaData = Object.values(data.areaUsage);
-            const palette = ['#22d3ee', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#38bdf8', '#fcd34d'];
-            areaChart = new Chart(document.getElementById('areaChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: areaLabels,
-                    datasets: [{
-                        data: areaData,
-                        backgroundColor: areaLabels.map((_, i) => palette[i % palette.length]),
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'bottom' } }
-                }
-            });
-
-            const last7Labels = dailySorted.slice(-7);
-            const last7Data = last7Labels.map((k) => data.dailyUsage[k]);
-            weeklyChart = new Chart(document.getElementById('weeklyChart'), {
-                type: 'line',
-                data: {
-                    labels: last7Labels,
-                    datasets: [{
-                        label: 'Liters',
-                        data: last7Data,
-                        borderColor: '#a78bfa',
-                        backgroundColor: 'rgba(167, 139, 250, 0.12)',
-                        tension: 0.35,
-                        fill: true
-                    }]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true } } }
-            });
-
-            const blockLabels = Object.keys(data.blockUsage || {});
-            const blockData = blockLabels.map((k) => data.blockUsage[k]);
-            blockChart = new Chart(document.getElementById('blockChart'), {
-                type: 'bar',
-                data: {
-                    labels: blockLabels.length ? blockLabels : ['—'],
-                    datasets: [{
-                        label: 'Liters',
-                        data: blockLabels.length ? blockData : [0],
-                        backgroundColor: 'rgba(56, 189, 248, 0.55)',
-                        borderRadius: 8
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { beginAtZero: true } }
-                }
-            });
-
-            const tod = data.timeOfDayUsage || {};
-            const todLabels = ['Morning', 'Afternoon', 'Evening', 'Night'];
-            const todKeys = ['morning', 'afternoon', 'evening', 'night'];
-            const todValues = todKeys.map((k) => tod[k] || 0);
-            todChart = new Chart(document.getElementById('todChart'), {
-                type: 'polarArea',
-                data: {
-                    labels: todLabels,
-                    datasets: [{
-                        data: todValues,
-                        backgroundColor: [
-                            'rgba(251, 191, 36, 0.55)',
-                            'rgba(56, 189, 248, 0.55)',
-                            'rgba(167, 139, 250, 0.55)',
-                            'rgba(15, 23, 42, 0.8)'
-                        ],
-                        borderWidth: 1,
-                        borderColor: chartGrid
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'bottom' } },
-                    scales: { r: { beginAtZero: true } }
-                }
-            });
-
-            const guide = data.benchmarkTargetHigh || 120;
-            const avgStu = data.avgPerStudent || 0;
-            benchmarkChart = new Chart(document.getElementById('benchmarkChart'), {
-                type: 'bar',
-                data: {
-                    labels: ['Your avg (L/person)', 'Guide upper band'],
-                    datasets: [{
-                        label: 'Liters',
-                        data: [avgStu, guide],
-                        backgroundColor: ['rgba(34, 211, 238, 0.7)', 'rgba(148, 163, 184, 0.35)'],
-                        borderRadius: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                afterLabel: () => `Typical sustainable band: ${data.benchmarkTargetLow}–${data.benchmarkTargetHigh} L/person/day`
-                            }
-                        }
-                    },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Liters' } } }
-                }
-            });
-
-            const suggestionsList = document.getElementById('suggestionsList');
-            suggestionsList.innerHTML = '';
-            data.suggestions.forEach((suggestion) => {
-                const li = document.createElement('li');
-                li.textContent = suggestion;
-                suggestionsList.appendChild(li);
-            });
-
-            if (data.conservationSteps && data.conservationSteps.length) {
-                renderConservationSteps(data.conservationSteps);
+        // 6. Rising trend
+        const days = Object.keys(data.dailyUsage || {}).sort();
+        if (days.length >= 3) {
+            const last3 = days.slice(-3).map(d => data.dailyUsage[d]);
+            if (last3[2] > last3[1] && last3[1] > last3[0]) {
+                measures.push({
+                    priority: 'warning',
+                    icon: 'fa-arrow-trend-up',
+                    title: 'Usage Trending Upward',
+                    text: 'Water consumption has increased for 3 consecutive days. Identify the cause and take corrective action before it escalates.',
+                    action: 'Review last 3 days'
+                });
             }
         }
 
-        document.getElementById('btnApplyFilter').addEventListener('click', loadDashboard);
-        document.getElementById('btnClearFilter').addEventListener('click', clearFilter);
+        // 7. All good — positive reinforcement
+        if (!data.abnormal && data.avgPerStudent <= 120 && data.efficiencyCategory !== 'Poor') {
+            measures.push({
+                priority: 'good',
+                icon: 'fa-recycle',
+                title: 'Keep Reusing Greywater',
+                text: 'Usage looks healthy. Reinforce good habits by reusing laundry rinse water for floor cleaning where safe.',
+                action: 'Sustain good habits'
+            });
+        }
+
+        // Always add one universal eco tip
+        measures.push({
+            priority: 'tip',
+            icon: 'fa-faucet-drip',
+            title: 'Report Dripping Taps',
+            text: 'A single dripping tap wastes up to 1,000 L/month. Place a tap-check reminder in common areas and log repairs weekly.',
+            action: 'Log & fix drips'
+        });
+
+        // Render — cap at 5 cards, critical first
+        const order = { critical: 0, warning: 1, good: 2, tip: 3 };
+        measures.sort((a, b) => order[a.priority] - order[b.priority]);
+        measures.slice(0, 5).forEach(m => {
+            const card = document.createElement('div');
+            card.className = `cm-card cm-card--${m.priority}`;
+            card.innerHTML = `
+                <div class="cm-icon-wrap"><i class="fas ${m.icon}"></i></div>
+                <div class="cm-body">
+                    <div class="cm-header">
+                        <span class="cm-badge cm-badge--${m.priority}">${m.priority === 'critical' ? '🔴 Critical' : m.priority === 'warning' ? '🟡 Warning' : m.priority === 'good' ? '🟢 Good' : '💧 Tip'}</span>
+                    </div>
+                    <h4>${m.title}</h4>
+                    <p>${m.text}</p>
+                    <span class="cm-action"><i class="fas fa-arrow-right"></i> ${m.action}</span>
+                </div>`;
+            grid.appendChild(card);
+        });
+    }
+
+    // ── AI suggestions ────────────────────────────────────────
+    const AI_ICONS  = { tip:'fa-lightbulb', alert:'fa-triangle-exclamation', recommendation:'fa-star' };
+    const AI_COLORS = { tip:'success', alert:'danger', recommendation:'warning' };
+
+    async function loadAiSuggestions(data) {
+        const box  = document.getElementById('aiSuggestionsBox');
+        const icon = document.getElementById('aiRefreshIcon');
+        box.innerHTML = '<div class="ai-placeholder"><i class="fas fa-spinner fa-spin"></i> Generating AI suggestions…</div>';
+        icon.className = 'fas fa-spinner fa-spin';
+
+        const topZone = Object.entries(data.areaUsage || {}).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'N/A';
+        try {
+            const res = await fetch('/api/ai-suggestions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ totalUsage: data.totalUsage, avgPerStudent: data.avgPerStudent,
+                    peakTime: data.peakTime, abnormal: data.abnormal,
+                    efficiencyScore: data.efficiencyScore, efficiencyCategory: data.efficiencyCategory,
+                    dailyUsage: data.dailyUsage, topZone })
+            });
+            const json = await res.json();
+            if (json.error) { box.innerHTML = `<div class="ai-placeholder ai-error"><i class="fas fa-circle-xmark"></i> ${json.error}</div>`; return; }
+            box.innerHTML = '';
+            const grid = document.createElement('div'); grid.className = 'ai-grid';
+            (json.suggestions || []).forEach(s => {
+                const type=s.type||'tip', color=AI_COLORS[type]||'success', ico=AI_ICONS[type]||'fa-lightbulb';
+                const card=document.createElement('div'); card.className=`ai-card ai-card--${color}`;
+                card.innerHTML=`<i class="fas ${ico}"></i><p>${s.text}</p>`;
+                grid.appendChild(card);
+            });
+            box.appendChild(grid);
+        } catch { box.innerHTML=`<div class="ai-placeholder ai-error"><i class="fas fa-circle-xmark"></i> Could not reach AI service.</div>`; }
+        finally { icon.className='fas fa-rotate-right'; }
+    }
+
+    document.getElementById('btnAiRefresh').addEventListener('click', () => { if (_lastData) loadAiSuggestions(_lastData); });
+
+    // ── Filters ───────────────────────────────────────────────
+    function buildUrl() {
+        const date = document.getElementById('dateFilter').value;
+        return '/api/analytics' + (date ? `?date=${date}` : '');
+    }
+
+    function clearFilter() {
+        document.getElementById('dateFilter').value = '';
+        document.querySelectorAll('#datePills button').forEach(b => b.classList.remove('active'));
         loadDashboard();
+    }
+
+    async function loadDatePills() {
+        const res  = await fetch('/api/dates');
+        const json = await res.json();
+        const container = document.getElementById('datePills');
+        container.innerHTML = '';
+        (json.dates || []).forEach(date => {
+            const btn = document.createElement('button');
+            btn.textContent = date; btn.className = 'date-pill';
+            btn.addEventListener('click', () => {
+                document.getElementById('dateFilter').value = date;
+                container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                loadDashboard();
+            });
+            container.appendChild(btn);
+        });
+    }
+
+    // ── CSV export ────────────────────────────────────────────
+    document.getElementById('btnExport').addEventListener('click', async () => {
+        const res  = await fetch(buildUrl());
+        const data = await res.json();
+        if (data.error) return alert('No data to export.');
+        const rows = [['Date','Total Usage (L)']];
+        Object.keys(data.dailyUsage).sort().forEach(d => rows.push([d, data.dailyUsage[d]]));
+        const csv  = rows.map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'aquatrack_export.csv' });
+        a.click();
+    });
+
+    document.getElementById('btnApplyFilter').addEventListener('click', loadDashboard);
+    document.getElementById('btnClearFilter').addEventListener('click', clearFilter);
+
+    loadDatePills();
+    loadDashboard();
     </script>
 </body>
 </html>

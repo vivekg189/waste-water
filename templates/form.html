@@ -27,69 +27,281 @@
     <div class="container">
         <header class="page-header">
             <h1>Log water usage</h1>
-            <p class="subtitle">Tank drop = consumption since the last reading. Keep times accurate so hourly charts stay meaningful.</p>
+            <p class="subtitle">Record a tank reading — the drop between levels is your consumption for that interval.</p>
         </header>
 
-        <div class="form-shell glass-card form-card">
-            <form id="waterForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="date"><i class="fas fa-calendar-day"></i> Date</label>
-                        <input type="date" id="date" name="date" required>
+        <!-- High usage alert -->
+        <div id="highUsageAlert" class="alert" style="display:none;">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span id="highUsageMsg"></span>
+        </div>
+
+        <div class="entry-layout">
+
+            <!-- LEFT: Input card -->
+            <div class="glass-card form-card">
+                <h2 class="card-section-title"><i class="fas fa-pen-to-square"></i> Reading details</h2>
+                <form id="waterForm" novalidate>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="date"><i class="fas fa-calendar-day"></i> Date</label>
+                            <input type="date" id="date" name="date" required>
+                            <span class="field-error" id="err-date"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="time"><i class="fas fa-clock"></i> Time</label>
+                            <input type="time" id="time" name="time" required>
+                            <span class="field-error" id="err-time"></span>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="time"><i class="fas fa-clock"></i> Time</label>
-                        <input type="time" id="time" name="time" required>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tankCapacity"><i class="fas fa-database"></i> Tank capacity (L)</label>
+                            <input type="number" id="tankCapacity" name="tankCapacity" min="1" step="0.01" placeholder="e.g. 5000" required>
+                            <span class="field-error" id="err-tankCapacity"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="students"><i class="fas fa-users"></i> Residents / students</label>
+                            <input type="number" id="students" name="students" min="1" placeholder="e.g. 50" required>
+                            <span class="field-error" id="err-students"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="prevLevel"><i class="fas fa-arrow-up"></i> Previous level (L)</label>
+                            <input type="number" id="prevLevel" name="prevLevel" min="0" step="0.01" placeholder="e.g. 4500" required>
+                            <span class="field-error" id="err-prevLevel"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="currLevel"><i class="fas fa-arrow-down"></i> Current level (L)</label>
+                            <input type="number" id="currLevel" name="currLevel" min="0" step="0.01" placeholder="e.g. 4200" required>
+                            <span class="field-error" id="err-currLevel"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="area"><i class="fas fa-map-pin"></i> Usage zone</label>
+                            <select id="area" name="area" required>
+                                <option value="">Select zone</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Laundry">Laundry</option>
+                                <option value="Cleaning">Cleaning</option>
+                            </select>
+                            <span class="field-error" id="err-area"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="block"><i class="fas fa-building"></i> Block / wing</label>
+                            <input type="text" id="block" name="block" placeholder="e.g. Block A" required>
+                            <span class="field-error" id="err-block"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:1.25rem;">
+                        <label for="remarks"><i class="fas fa-comment-dots"></i> Remarks <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+                        <textarea id="remarks" name="remarks" rows="2" placeholder="e.g. Tap leak noticed, tank refilled at 8 AM…" style="width:100%;padding:0.75rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-solid);color:var(--text);font-family:inherit;font-size:0.95rem;resize:vertical;"></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit reading</button>
+                        <button type="button" class="btn btn-reset" id="btnReset"><i class="fas fa-rotate-left"></i> Reset</button>
+                    </div>
+                </form>
+
+                <div id="message" class="message"></div>
+            </div>
+
+            <!-- RIGHT: Live calculations card -->
+            <div class="calc-card glass-card">
+                <h2 class="card-section-title"><i class="fas fa-calculator"></i> Live calculations</h2>
+
+                <div class="calc-item accent">
+                    <div class="calc-label"><i class="fas fa-droplet"></i> Tank drop</div>
+                    <div class="calc-value" id="calcDrop">—</div>
+                    <div class="calc-sub">liters consumed</div>
+                </div>
+
+                <div class="calc-item">
+                    <div class="calc-label"><i class="fas fa-person"></i> Usage per person</div>
+                    <div class="calc-value" id="calcPerPerson">—</div>
+                    <div class="calc-sub">liters / resident</div>
+                </div>
+
+                <div class="calc-item">
+                    <div class="calc-label"><i class="fas fa-percent"></i> Tank fill level</div>
+                    <div class="calc-value" id="calcFillPct">—</div>
+                    <div class="calc-sub">current % of capacity</div>
+                    <div class="fill-bar-track">
+                        <div class="fill-bar-fill" id="fillBar"></div>
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="tankCapacity">Tank capacity (L)</label>
-                        <input type="number" id="tankCapacity" name="tankCapacity" min="0" step="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="prevLevel">Previous level (L)</label>
-                        <input type="number" id="prevLevel" name="prevLevel" min="0" step="0.01" required>
-                    </div>
+                <div class="calc-item">
+                    <div class="calc-label"><i class="fas fa-chart-line"></i> Drop %</div>
+                    <div class="calc-value" id="calcDropPct">—</div>
+                    <div class="calc-sub">of previous level used</div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="currLevel">Current level (L)</label>
-                        <input type="number" id="currLevel" name="currLevel" min="0" step="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="students">Residents / students</label>
-                        <input type="number" id="students" name="students" min="1" required>
-                    </div>
+                <div class="calc-hint">
+                    <i class="fas fa-circle-info"></i> Values update as you type — nothing is saved until you submit.
                 </div>
+            </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="area">Primary usage zone</label>
-                        <select id="area" name="area" required>
-                            <option value="">Select area</option>
-                            <option value="Bathroom">Bathroom</option>
-                            <option value="Kitchen">Kitchen</option>
-                            <option value="Laundry">Laundry</option>
-                            <option value="Cleaning">Cleaning</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="block">Block / wing</label>
-                        <input type="text" id="block" name="block" placeholder="e.g. Block A" required>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit reading</button>
-            </form>
-
-            <div id="message" class="message"></div>
         </div>
     </div>
 
     <footer class="site-footer">Tip: log at consistent intervals for smoother heatmaps</footer>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+    <script>
+        // --- defaults ---
+        const now = new Date();
+        document.getElementById('date').valueAsDate = now;
+        document.getElementById('time').value = now.toTimeString().slice(0, 5);
+
+        // --- live calc ---
+        function recalc() {
+            const cap  = parseFloat(document.getElementById('tankCapacity').value);
+            const prev = parseFloat(document.getElementById('prevLevel').value);
+            const curr = parseFloat(document.getElementById('currLevel').value);
+            const stu  = parseInt(document.getElementById('students').value);
+
+            const drop       = (!isNaN(prev) && !isNaN(curr)) ? prev - curr : NaN;
+            const perPerson  = (!isNaN(drop) && !isNaN(stu) && stu > 0) ? drop / stu : NaN;
+            const fillPct    = (!isNaN(curr) && !isNaN(cap) && cap > 0) ? (curr / cap * 100) : NaN;
+            const dropPct    = (!isNaN(drop) && !isNaN(prev) && prev > 0) ? (drop / prev * 100) : NaN;
+
+            document.getElementById('calcDrop').textContent      = isNaN(drop)      ? '—' : drop.toFixed(2) + ' L';
+            document.getElementById('calcPerPerson').textContent = isNaN(perPerson) ? '—' : perPerson.toFixed(2) + ' L';
+            document.getElementById('calcFillPct').textContent   = isNaN(fillPct)   ? '—' : fillPct.toFixed(1) + '%';
+            document.getElementById('calcDropPct').textContent   = isNaN(dropPct)   ? '—' : dropPct.toFixed(1) + '%';
+
+            // fill bar
+            const bar = document.getElementById('fillBar');
+            if (!isNaN(fillPct)) {
+                const pct = Math.min(100, Math.max(0, fillPct));
+                bar.style.width = pct + '%';
+                bar.style.background = pct > 60 ? 'var(--success)' : pct > 30 ? 'var(--warning)' : 'var(--danger)';
+            } else {
+                bar.style.width = '0%';
+            }
+
+            // high usage alert
+            const alert = document.getElementById('highUsageAlert');
+            if (!isNaN(drop) && drop > 500) {
+                document.getElementById('highUsageMsg').textContent =
+                    `High usage detected: ${drop.toFixed(0)} L drop. Verify readings or check for leaks.`;
+                alert.style.display = 'flex';
+            } else {
+                alert.style.display = 'none';
+            }
+        }
+
+        ['tankCapacity','prevLevel','currLevel','students'].forEach(id =>
+            document.getElementById(id).addEventListener('input', recalc)
+        );
+
+        // --- validation helpers ---
+        function setError(id, msg) {
+            const el = document.getElementById('err-' + id);
+            const input = document.getElementById(id);
+            if (el) el.textContent = msg;
+            if (input) input.classList.toggle('input-error', !!msg);
+        }
+        function clearErrors() {
+            ['date','time','tankCapacity','prevLevel','currLevel','students','area','block']
+                .forEach(id => setError(id, ''));
+        }
+
+        function validate(data) {
+            let ok = true;
+            if (!data.date)         { setError('date', 'Date is required.');          ok = false; }
+            if (!data.time)         { setError('time', 'Time is required.');           ok = false; }
+            if (!data.tankCapacity || data.tankCapacity <= 0) { setError('tankCapacity', 'Enter a valid capacity.'); ok = false; }
+            if (data.prevLevel === '' || isNaN(data.prevLevel)) { setError('prevLevel', 'Enter previous level.');   ok = false; }
+            if (data.currLevel === '' || isNaN(data.currLevel)) { setError('currLevel', 'Enter current level.');    ok = false; }
+            if (!data.students || data.students < 1)           { setError('students', 'At least 1 resident.');      ok = false; }
+            if (!data.area)         { setError('area', 'Select a usage zone.');        ok = false; }
+            if (!data.block.trim()) { setError('block', 'Block / wing is required.');  ok = false; }
+
+            if (ok) {
+                if (parseFloat(data.currLevel) > parseFloat(data.prevLevel)) {
+                    setError('currLevel', 'Current level cannot exceed previous level.');
+                    ok = false;
+                }
+                if (parseFloat(data.prevLevel) > parseFloat(data.tankCapacity)) {
+                    setError('prevLevel', 'Previous level cannot exceed tank capacity.');
+                    ok = false;
+                }
+                if (parseFloat(data.currLevel) > parseFloat(data.tankCapacity)) {
+                    setError('currLevel', 'Current level cannot exceed tank capacity.');
+                    ok = false;
+                }
+            }
+            return ok;
+        }
+
+        // --- submit ---
+        document.getElementById('waterForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearErrors();
+
+            const data = {
+                date:         document.getElementById('date').value,
+                time:         document.getElementById('time').value,
+                tankCapacity: document.getElementById('tankCapacity').value,
+                prevLevel:    document.getElementById('prevLevel').value,
+                currLevel:    document.getElementById('currLevel').value,
+                students:     document.getElementById('students').value,
+                area:         document.getElementById('area').value,
+                block:        document.getElementById('block').value,
+                remarks:      document.getElementById('remarks').value
+            };
+
+            if (!validate(data)) return;
+
+            try {
+                const res    = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showMessage(`✓ Submitted! Water used: ${result.waterUsed.toFixed(2)} L`, 'success');
+                    this.reset();
+                    document.getElementById('date').valueAsDate = new Date();
+                    document.getElementById('time').value = new Date().toTimeString().slice(0, 5);
+                    recalc();
+                } else {
+                    showMessage('Submission failed. Please try again.', 'error');
+                }
+            } catch {
+                showMessage('Cannot reach server. Check your connection.', 'error');
+            }
+        });
+
+        // --- reset ---
+        document.getElementById('btnReset').addEventListener('click', function() {
+            document.getElementById('waterForm').reset();
+            document.getElementById('date').valueAsDate = new Date();
+            document.getElementById('time').value = new Date().toTimeString().slice(0, 5);
+            clearErrors();
+            recalc();
+            document.getElementById('message').style.display = 'none';
+        });
+
+        function showMessage(text, type) {
+            const el = document.getElementById('message');
+            el.textContent = text;
+            el.className = 'message ' + type;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 5000);
+        }
+    </script>
 </body>
 </html>
